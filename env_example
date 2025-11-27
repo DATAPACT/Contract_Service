@@ -1,0 +1,14 @@
+Create a .env file and add following items:
+
+MONGO_USER=root
+MONGO_PASSWORD=your_password
+MONGO_HOST=your_machine_ip
+MONGO_PORT=27017
+
+API_CONTRACT_SERVICE_URL=http://your_machine_ip:8006
+
+OPENAI_API_KEY=your_OpenAI_key
+MODEL_NAME=gpt-5-nano
+#o4-mini
+#gpt-5-nano
+#MODEL_NAME=gpt-4o-mini
