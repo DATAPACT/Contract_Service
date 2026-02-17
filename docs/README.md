@@ -4,32 +4,17 @@ Powered by
 
 [![UoSLOGO](./images/UniSouthampton.png)](https://dips.soton.ac.uk/#home)
 
-| Project Links |
-| ------------- | 	
-| Software GitHub Repository --> Policy Editor software <https://github.com/...> | //use to refer to external repositories
-| Progress GitHub Project [ADD URL] |
 
 ## **General Description**
 
-
-
-## **Architecture**
-
-
-## **Component Definition**
-
-
-## **Screenshots**
-
+Repository for the FastAPI implementation of a Contract Service that enables 1) the creation of contracts, 2) the storage and management of contracts and 3) functions to operate for specific contracts.
 
 ## **Commercial Information**
 
-Table with the organisation, license nature (Open Source, Commercial ... ) and the license. Replace with the values of your module.
 
 | Organisation (s) | License Nature | License |
 | ---------------  | -------------- | ------- |
-
-## **Top Features**
+| University of Southampton  | Open Source | MIT Licence |
 
 
 
@@ -38,33 +23,39 @@ Table with the organisation, license nature (Open Source, Commercial ... ) and t
 
 ### Requirements
 
-To be defined. 
+Docker
 
 ### Software
 
-To be defined. 
+Django, Python
 
 ### Summary of installation steps
 
-To be defined. 
+#### Docker Setup Instructions
 
-### Detailed steps
+* Configure the files as mentioned above
+* Build and run the docker container as usual
+  * run MongoDB in Docker with your app
+    * build docker-compose.yml file
+    * docker compose up --build 
+    * or  docker compose up -d --build (running on background)
+    * docker compose down
 
-To be defined. 
+  
+* The API documentation will then be available under the `/docs` sub path, such as `http://127.0.0.1:8006/docs`
 
-## **How To Use**
+#### Manual Installation Instructions
+If you are not using docker, you can run the project as follows:
+* Configure the files as mentioned above
+* Install MongoDB database
+* Install required libraries using `pip install -r requirements.txt`
+* Run FastAPI  `python contract_service_api.py` from the project directory
+* See the API here `http://127.0.0.1:8006/docs`
 
-To be defined. 
 
+## Expected KPIs
+This KPI is shared with the Policy Service suite of tools, which include the Policy Editor, the Policy Enginge and the Ontology Service, as it is affected by the expressiveness of the ODRL Policy language used.
 
-## **Other Information**
-
-To be defined. 
-
-## **OpenAPI Specification**
-
-To be defined. 
-
-## **Additional Links**
-
-To be defined. 
+| What | How | Values |
+| --- | --- | --- |
+| Policy management expressiveness: ability to represent data processing regulations in a machine processable form. | analysis of an existing large (>100) corpus of data sharing/data processing agreements  | analysis of an existing large (>100) corpus of data sharing/data processing agreements| Ability to move >15% of contractual clauses and privacy policies in an average agreement to machine-processable form.  |
