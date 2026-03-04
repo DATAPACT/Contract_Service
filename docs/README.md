@@ -58,4 +58,7 @@ This KPI is shared with the Policy Service suite of tools, which include the Pol
 
 | What | How | Values |
 | --- | --- | --- |
-| Policy management expressiveness: ability to represent data processing regulations in a machine processable form. | analysis of an existing large (>100) corpus of data sharing/data processing agreements  | analysis of an existing large (>100) corpus of data sharing/data processing agreements| Ability to move >15% of contractual clauses and privacy policies in an average agreement to machine-processable form.  |
+| 1) Policy management expressiveness: ability to represent data processing terms in a machine processable form | 1) aggregate and analyse a large (>100) corpus of data sharing/data processing agreements | 1) Ability to move >15% of contractual clauses and privacy policies in an average agreement to machine-processable form;  |
+
+Progress towards KPIs:
+* 04/03/2026: 1) collected corpus of data sharing agreements
