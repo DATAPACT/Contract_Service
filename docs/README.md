@@ -54,7 +54,6 @@ If you are not using docker, you can run the project as follows:
 
 
 ## Expected KPIs
-This KPI is shared with the Policy Service suite of tools, which include the Policy Editor, the Policy Enginge and the Ontology Service, as it is affected by the expressiveness of the ODRL Policy language used.
 
 | What | How | Values |
 | --- | --- | --- |
