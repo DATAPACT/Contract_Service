@@ -11,15 +11,16 @@ from typing import Any, Dict, List, Literal, Optional
 
 from bson import ObjectId
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, Body, HTTPException, Path, Query
+from fastapi import Depends, FastAPI, Header, Body, HTTPException, Path, Query
 from fastapi.encoders import jsonable_encoder
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from starlette.responses import Response as StarletteResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, AliasChoices
 from pydantic import field_validator
 from pymongo import ASCENDING, TEXT
 
+from auth import verify_access
 from ca_generation import get_consent_contract_text, get_ca_contract_json
 from dsa_generation import get_dsa_contract_text, get_dsa_contract_json
 from utils import (text_to_pdf_bytes, TEXT_FIELDS, regex_or_query, create_odrl_decription, _to_bytes, summarize_text,
@@ -37,25 +38,108 @@ app = FastAPI(
     title="Contract Service API",
     description="UPCAST Contract Service API",
     openapi_url="/openapi.json",
-    docs_url="/docs",
+    docs_url=None,  # replaced by custom /docs with SSO postMessage support
     version="1.0",
+    dependencies=[Depends(verify_access)],
 )
 
-origins = [
-    "*",
+FRAME_ANCESTORS = os.getenv("FRAME_ANCESTORS", "")
+
+# Origins that require credentialed CORS (iframe parent + local dev).
+# All other origins receive Access-Control-Allow-Origin: *
+_credentialed_origins: set[str] = {
     "http://127.0.0.1:8866",
     "http://localhost:8866",
     "http://0.0.0.0:8866",
-    # "http://dips.soton.ac.uk:8866",
-]
+} | {o.rstrip("/") for o in FRAME_ANCESTORS.split() if o}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+_CORS_HEADERS = "Authorization, Content-Type, Accept"
+_CORS_METHODS = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+_CSP = "frame-ancestors 'self' " + (FRAME_ANCESTORS.strip() or "'none'")
+
+
+def _cors_headers(origin: str, is_credentialed: bool) -> dict:
+    headers = {
+        "Access-Control-Allow-Origin": origin if is_credentialed else "*",
+        "Access-Control-Allow-Methods": _CORS_METHODS,
+        "Access-Control-Allow-Headers": _CORS_HEADERS,
+    }
+    if is_credentialed:
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return headers
+
+
+@app.middleware("http")
+async def cors_and_csp(request, call_next):
+    origin = request.headers.get("origin", "")
+    is_credentialed = origin in _credentialed_origins
+
+    if request.method == "OPTIONS":
+        return StarletteResponse(
+            status_code=204,
+            headers={**_cors_headers(origin, is_credentialed), "Access-Control-Max-Age": "600"},
+        )
+
+    response = await call_next(request)
+    response.headers.update(_cors_headers(origin, is_credentialed))
+    response.headers["Content-Security-Policy"] = _CSP
+    return response
+
+
+# Trusted origins for postMessage — derived from FRAME_ANCESTORS at startup.
+# JS receives this as a JSON array so the server is the single source of truth.
+_TRUSTED_ORIGINS_JS = (
+    "[" + ", ".join(f'"{o}"' for o in _credentialed_origins) + "]"
 )
+
+_SWAGGER_HTML = (
+    """<!DOCTYPE html>
+<html>
+<head>
+  <title>Contract Service API</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+<script>
+  var _ssoToken = null;
+  var _trustedOrigins = __TRUSTED_ORIGINS__;
+
+  window.addEventListener("message", function (event) {
+    if (!_trustedOrigins.includes(event.origin)) return;
+    if (event.data && event.data.type === "SSO_TOKEN" && event.data.token) {
+      _ssoToken = event.data.token;
+    }
+  });
+
+  window.onload = function () {
+    window._swaggerUi = SwaggerUIBundle({
+      url: "/openapi.json",
+      dom_id: "#swagger-ui",
+      presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+      layout: "StandaloneLayout",
+      requestInterceptor: function (request) {
+        if (_ssoToken) {
+          request.headers["Authorization"] = "Bearer " + _ssoToken;
+        }
+        return request;
+      },
+    });
+    window.parent.postMessage({ type: "SSO_READY" }, "*");
+  };
+</script>
+</body>
+</html>""".replace("__TRUSTED_ORIGINS__", _TRUSTED_ORIGINS_JS)
+)
+
+
+@app.get("/docs", include_in_schema=False, dependencies=[])
+async def custom_swagger_ui() -> HTMLResponse:
+    return HTMLResponse(_SWAGGER_HTML)
 
 
 class MongoObject(BaseModel):
