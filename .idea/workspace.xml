@@ -5,24 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="82c7e697-05d9-446e-8f3d-aa7feec3c757" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/cactus_dsa_generation.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/demo/.env_from_dips.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/demo/Data Sharing Agreement (for CACTUS) 2ND DRAFT.docx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ca_generation.py" beforeDir="false" afterPath="$PROJECT_DIR$/ca_generation.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/demo/Keycloak_integrated2ContractService.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/auth.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contract_service_api.py" beforeDir="false" afterPath="$PROJECT_DIR$/contract_service_api.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/download_contract/contract_id-68d11fc58cad15b8b8f0f7b9_negotiation_id-None.pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/download_contract/contract_id-68d126108cad15b8b8f0f7ba_negotiation_id-None.pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/download_contract/contract_id-68dbb6409bb04bc07766f9de_negotiation_id-None.pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/download_contract/contract_id-68dbb7289bb04bc07766f9df_negotiation_id-None.pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/download_contract/contract_id-68dbb8209bb04bc07766f9e0_negotiation_id-None.pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/download_contract/contract_id-68dbb9909bb04bc07766f9e1_negotiation_id-None.pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/download_contract/contract_id-68dbba629bb04bc07766f9e2_negotiation_id-None.pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/download_contract/contract_id-68dbf0d3cd40422b988d45a2_negotiation_id-None.pdf" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/dsa_generation.py" beforeDir="false" afterPath="$PROJECT_DIR$/dsa_generation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/env_example" beforeDir="false" afterPath="$PROJECT_DIR$/env_example" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -40,19 +28,20 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/mh1f25/scratch/datapack_pro/datapack-local-dev/Contract_Service&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "last_opened_file_path": "/home/mh1f25/scratch/datapack_pro/datapack-local-dev/Contract_Service/demo",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RdControllerToolWindowsLayoutState" isNewUi="true">
     <layout>
       <window_info id="Bookmarks" side_tool="true" />
@@ -62,7 +51,7 @@
       <window_info id="Commit_Guest" show_stripe_button="false" />
       <window_info id="Pull Requests" />
       <window_info id="Learn" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.23554687" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.13658854" />
       <window_info id="Commit" order="1" weight="0.25" />
       <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Database Changes" />
@@ -70,6 +59,7 @@
       <window_info anchor="bottom" id="TODO" />
       <window_info anchor="bottom" id="File Transfer" />
       <window_info anchor="bottom" id="HfCacheToolWindow" />
+      <window_info anchor="bottom" id="Find" />
       <window_info anchor="bottom" id="Version Control" order="0" />
       <window_info anchor="bottom" id="Problems" order="1" />
       <window_info anchor="bottom" id="Problems View" order="2" />
@@ -88,6 +78,11 @@
       <window_info anchor="right" id="Maven" order="4" weight="0.25" />
       <window_info anchor="right" id="Plots" order="5" weight="0.1" />
     </layout>
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/demo" />
+    </key>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>

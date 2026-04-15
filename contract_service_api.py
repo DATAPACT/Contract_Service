@@ -9,9 +9,11 @@ from enum import Enum
 from html import escape
 from typing import Any, Dict, List, Literal, Optional
 
+import httpx
+from fastapi import Depends, FastAPI, Header, Body, HTTPException, Path, Query, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from bson import ObjectId
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, Body, HTTPException, Path, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.responses import Response as StarletteResponse
@@ -20,9 +22,9 @@ from pydantic import BaseModel, Field, AliasChoices
 from pydantic import field_validator
 from pymongo import ASCENDING, TEXT
 
-from auth import verify_access
-from ca_generation import get_consent_contract_text, get_ca_contract_json
-from dsa_generation import get_dsa_contract_text, get_dsa_contract_json
+from ca_generation import get_consent_contract_text
+from dsa_generation import get_dsa_contract_text
+from cactus_dsa_generation import get_cactus_dsa_contract_text
 from utils import (text_to_pdf_bytes, TEXT_FIELDS, regex_or_query, create_odrl_decription, _to_bytes, summarize_text,
                    odrl_formate_convert, contract_to_turtle)
 
@@ -34,13 +36,21 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+load_dotenv(dotenv_path=".env")
+
 app = FastAPI(
     title="Contract Service API",
     description="UPCAST Contract Service API",
     openapi_url="/openapi.json",
     docs_url=None,  # replaced by custom /docs with SSO postMessage support
     version="1.0",
-    dependencies=[Depends(verify_access)],
+    # Old code:
+    # dependencies=[Depends(verify_access)],
+    #
+    # New code:
+    # do not apply the new Keycloak-specific global dependency here.
+    # This service already authenticates protected routes with get_current_user(),
+    # and those routes validate the same JWT issued by authentication-service.
 )
 
 # Old code:
@@ -285,10 +295,10 @@ class AuthenticationRegisterUser(BaseModel):
 
 
 def build_authentication_service_url(path: str) -> str:
-    # Contract service must validate tokens with the dedicated authentication service.
+    # Keep all authentication checks on the dedicated authentication service.
     base_url = (API_AUTHENTICATION_URL or "").rstrip("/")
     if not base_url:
-        raise HTTPException(status_code=500, detail="API_AUTHENTICATION_URL environment variable is not set")
+        raise HTTPException(status_code=500, detail="API_AUTHENTICATION_URL environment variable not set")
     normalized_path = path if path.startswith("/") else f"/{path}"
     return f"{base_url}{normalized_path}"
 

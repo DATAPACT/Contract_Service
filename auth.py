@@ -3,7 +3,7 @@ from typing import Optional
 
 import httpx
 from cachetools import TTLCache
-from fastapi import Header, HTTPException, status
+from fastapi import Header, HTTPException, Request, status
 
 KEYCLOAK_ISSUER = os.getenv("KEYCLOAK_ISSUER")
 
@@ -15,6 +15,7 @@ _http_client = httpx.AsyncClient(timeout=5.0)
 
 
 async def verify_access(
+    request: Request,
     authorization: Optional[str] = Header(None),
 ) -> None:
     """
@@ -22,6 +23,15 @@ async def verify_access(
       - Standalone (no Authorization header): passes through, no auth required.
       - Iframe / SSO mode (Authorization: Bearer <token> present): validated against Keycloak /userinfo.
     """
+    unauthenticated_paths = {
+        "/docs",
+        "/openapi.json",
+        "/user/login/",
+        "/user/register",
+    }
+    if request.url.path in unauthenticated_paths:
+        return
+
     if not authorization:
         return
 
