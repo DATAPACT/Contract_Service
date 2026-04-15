@@ -43,14 +43,29 @@ app = FastAPI(
     dependencies=[Depends(verify_access)],
 )
 
+# Old code:
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login/")
+#
+# New code keeps the same local docs route, but that route is now a proxy to
+# the dedicated authentication service.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login/")
+origins = [
+    "*",
+    "http://127.0.0.1:8866",
+    "http://localhost:8866",
+    "http://0.0.0.0:8866",
+    # "http://dips.soton.ac.uk:8866",
+]
+
 FRAME_ANCESTORS = os.getenv("FRAME_ANCESTORS", "")
 
 # Origins that require credentialed CORS (iframe parent + local dev).
 # All other origins receive Access-Control-Allow-Origin: *
 _credentialed_origins: set[str] = {
-    "http://127.0.0.1:8866",
-    "http://localhost:8866",
-    "http://0.0.0.0:8866",
+                    "*",
+                  "http://127.0.0.1:8866",
+                  "http://localhost:8866",
+                  "http://0.0.0.0:8866",
 } | {o.rstrip("/") for o in FRAME_ANCESTORS.split() if o}
 
 _CORS_HEADERS = "Authorization, Content-Type, Accept"
@@ -156,8 +171,10 @@ class ClientOptionalInfo(BaseModel):
     # client_pid: Optional[str] = Field(None, alias="negotiation_id" or "consent_id")
     client_pid: Optional[str] = Field(
         default=None,
-        validation_alias=AliasChoices('client_pid', 'request_id',
-                                      'negotiation_id', 'consent_id'),
+        validation_alias=AliasChoices('client_pid',
+                                      'request_id',
+                                      'negotiation_id',
+                                      'consent_id'),
         serialization_alias='client_pid',  # keep output name as client_pid
     )
 
@@ -169,7 +186,7 @@ class ClientOptionalInfo(BaseModel):
 class UpcastContractObject(MongoObject):
     client_optional_info: Optional[ClientOptionalInfo] = None
     # Must be set; restricted to allowed values and defaults to "dsa"
-    contract_type: Literal["dsa", "pda"] = Field( default="dsa", description="Type of contract.")
+    contract_type: Literal["dsa", "pda", "cactus_dsa"] = Field(default="dsa", description="Type of contract.")
     cactus_format: Optional[bool] = Field(default=None, description="If truthy, run cactus ODRL conversion.")
 
     validity_period: Optional[int] = None
@@ -177,13 +194,15 @@ class UpcastContractObject(MongoObject):
     contacts: Optional[Dict[str, Any]] = Field(default_factory=dict)
     resource_description: Optional[Dict[str, Any]] = Field(default_factory=dict)
     definitions: Optional[Dict[str, Any]] = Field(default_factory=dict)
-
+    custom_definitions: Optional[Dict[str, Any]] = Field(default_factory=dict)
     # Your custom clauses extracted from odrl_policy_summary
     custom_clauses: Optional[Dict[str, Any]] = Field(default_factory=dict)
     dpw: Optional[Dict[str, Any]] = Field(default_factory=dict)
     odrl: Optional[Dict[str, Any]] = Field(default_factory=dict)
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+    nlp: Optional[str] = Field(default=None,
+                               description="Latest agreement text for this contract.")  # i.e., natural_language_document
 
 
 class UpcastSignatureObject(MongoObject):
@@ -229,12 +248,11 @@ def normalize_bool(val) -> Optional[bool]:
 
 # Load environment variables from .env file
 # MONGO Connection Info
-
-load_dotenv()
 MONGO_USER = os.getenv("MONGO_USER")
 MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
 MONGO_HOST = os.getenv("MONGO_HOST", "localhost")
 MONGO_PORT = os.getenv("MONGO_PORT")
+API_AUTHENTICATION_URL = os.getenv("API_AUTHENTICATION_URL")
 if MONGO_PORT:  # Assumption: A local or remote installation of MongoDB is provided.
     MONGO_PORT = int(MONGO_PORT)
     MONGO_URI = f"mongodb://{MONGO_USER}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}"
@@ -246,11 +264,189 @@ db = client.upcast
 contracts_collection = db.contracts  # contracts collection
 
 
+class AuthenticatedUser(BaseModel):
+    id: str
+    username_email: Optional[str] = None
+    type: Optional[str] = None
+    is_admin: Optional[bool] = False
+
+
+class AuthenticationRegisterUser(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    username_email: Optional[str] = None
+    password: Optional[str] = None
+    organization: Optional[Any] = None
+    incorporation: Optional[str] = None
+    address: Optional[str] = None
+    vat_no: Optional[str] = None
+    position_title: Optional[str] = None
+    phone: Optional[str] = None
+
+
+def build_authentication_service_url(path: str) -> str:
+    # Contract service must validate tokens with the dedicated authentication service.
+    base_url = (API_AUTHENTICATION_URL or "").rstrip("/")
+    if not base_url:
+        raise HTTPException(status_code=500, detail="API_AUTHENTICATION_URL environment variable is not set")
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    return f"{base_url}{normalized_path}"
+
+
+@app.post("/user/register", summary="Register a user via authentication-service")
+async def register_user_via_authentication_service(
+        user: AuthenticationRegisterUser,
+        master_password_input: str,
+):
+    # Old code:
+    # contract-service did not expose any register endpoint.
+    #
+    # New code:
+    # expose a local register endpoint that forwards the request to
+    # authentication-service, so external callers and docs can use one path.
+    register_url = build_authentication_service_url("/user/register/")
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(
+            f"{register_url}?master_password_input={master_password_input}",
+            json=user.model_dump(exclude_none=True),
+        )
+
+    if response.status_code >= 400:
+        try:
+            detail = response.json().get("detail", "Registration failed")
+        except Exception:
+            detail = response.text or "Registration failed"
+        raise HTTPException(status_code=response.status_code, detail=detail)
+
+    return response.json()
+
+
+@app.post("/user/login/", summary="Login via authentication-service")
+async def login_user_via_authentication_service(form_data: OAuth2PasswordRequestForm = Depends()):
+    # Old code:
+    # contract-service did not expose any login endpoint.
+    #
+    # New code:
+    # expose a local login endpoint that forwards credentials to
+    # authentication-service. Swagger /docs can use this route directly.
+    login_url = build_authentication_service_url("/user/login/")
+    form_payload = {
+        "username": form_data.username,
+        "password": form_data.password,
+    }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(login_url, data=form_payload)
+
+    if response.status_code >= 400:
+        try:
+            detail = response.json().get("detail", "Incorrect email or password")
+        except Exception:
+            detail = response.text or "Incorrect email or password"
+        raise HTTPException(status_code=response.status_code, detail=detail)
+
+    return response.json()
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> AuthenticatedUser:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        verify_url = build_authentication_service_url("/user/verify-token/")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            verify_response = await client.post(
+                verify_url,
+                content=token,
+                headers={"Content-Type": "text/plain"},
+            )
+
+        if verify_response.status_code != 200:
+            raise credentials_exception
+
+        verify_payload = verify_response.json()
+        user_data = verify_payload.get("user") or {}
+        user_id = user_data.get("id")
+        if not user_id:
+            raise credentials_exception
+
+        return AuthenticatedUser(
+            id=str(user_id),
+            username_email=user_data.get("username_email"),
+            type=user_data.get("type"),
+            is_admin=user_data.get("is_admin", False),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Authentication verification failed: %s", exc)
+        raise credentials_exception
+
+
+def _collect_contract_access_user_ids(contract_obj: Dict[str, Any]) -> List[str]:
+    # Store a simple allow-list on each contract so later reads/updates/deletes
+    # can authorize access without guessing from unrelated fields.
+    allowed_ids = set()
+
+    for key in ("owner_user_id", "created_by_user_id"):
+        value = contract_obj.get(key)
+        if value:
+            allowed_ids.add(str(value))
+
+    for key in ("authorized_user_ids",):
+        values = contract_obj.get(key) or []
+        if isinstance(values, list):
+            for value in values:
+                if value:
+                    allowed_ids.add(str(value))
+
+    contacts = contract_obj.get("contacts") or {}
+    for role in ("consumer", "provider"):
+        contact = contacts.get(role) or {}
+        for key in ("_id", "id", "user_id", f"{role}_id"):
+            value = contact.get(key)
+            if value:
+                allowed_ids.add(str(value))
+
+    return sorted(allowed_ids)
+
+
+def _set_contract_access_metadata(contract_obj: Dict[str, Any], current_user: AuthenticatedUser) -> Dict[str, Any]:
+    # New code writes explicit ownership/access fields.
+    # Old code saved the contract body directly without any access metadata.
+    contract_obj["owner_user_id"] = str(current_user.id)
+    contract_obj["owner_username_email"] = current_user.username_email
+    contract_obj["authorized_user_ids"] = _collect_contract_access_user_ids(
+        {
+            **contract_obj,
+            "owner_user_id": str(current_user.id),
+            "created_by_user_id": str(current_user.id),
+        }
+    )
+    return contract_obj
+
+
+def _user_can_access_contract(contract: Dict[str, Any], current_user: AuthenticatedUser) -> bool:
+    if getattr(current_user, "is_admin", False):
+        return True
+    return str(current_user.id) in _collect_contract_access_user_ids(contract)
+
+
 # varify the user and negotiation
 async def _varify_contract(
-        contract_id: str
+        contract_id: str,
+        current_user: Optional[AuthenticatedUser] = None,
 ):
-    # validate & load contract
+    # Old code:
+    # async def _varify_contract(contract_id: str):
+    #     contract = await contracts_collection.find_one({"_id": cid})
+    #
+    # New code also checks whether the authenticated caller is allowed to use
+    # this contract after loading it.
     try:
         cid = ObjectId(contract_id)
     except Exception:
@@ -261,18 +457,26 @@ async def _varify_contract(
     if not contract:
         raise HTTPException(status_code=404, detail="contract not found")
 
+    if current_user and not _user_can_access_contract(contract, current_user):
+        raise HTTPException(status_code=403, detail="You do not have permission to access this contract")
+
     return contract
 
 
 @app.post("/contract/create", summary="Create a contract")
 async def create_contract(
         body: UpcastContractObject = Body(..., description="The contract object"),
+        current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
 
         print("function of /contract/create: contract API body: \n", body.dict())
 
         contract_obj = pydantic_to_dict(body, clean_id=True)
+        # New code adds access metadata derived from the authenticated caller
+        # and the contract participants in the payload.
+        # Old code inserted contract_obj directly without ownership data.
+        contract_obj = _set_contract_access_metadata(contract_obj, current_user)
 
         contract_type = contract_obj.get("contract_type")
 
@@ -294,10 +498,7 @@ async def create_contract(
                     )
 
             legal_contract = get_dsa_contract_text(contract_obj)
-            mp_json = get_dsa_contract_json(contract_obj, include_text=False)
             contract_obj['nlp'] = legal_contract
-
-            contract_obj['mp_json'] = mp_json
 
             # save the contract_obj into the collection
             contract_obj.pop('id', None)  # remove id item
@@ -340,10 +541,7 @@ async def create_contract(
 
             legal_contract = get_consent_contract_text(contract_obj)  # text generate
 
-            mp_json = get_ca_contract_json(contract_obj, include_text=False)
             contract_obj['nlp'] = legal_contract
-
-            contract_obj['mp_json'] = mp_json
 
             # save the contract_obj into the collection
             contract_obj.pop('id', None)  # remove id item
@@ -358,6 +556,45 @@ async def create_contract(
             else:
                 print(
                     f"contract {contract_id} created successfully for Consent request and saved in MongoDB \n\n")
+
+            return {
+                "message": "legal contract created successfully",
+                "legal_contract": legal_contract,
+                "contract_id": str(contract_id),
+            }
+
+        elif contract_type == "cactus_dsa":
+
+            print("\naiming to generate a CACTUS Data Sharing Agreement contract:\n")
+
+            # Optional ODRL cactus conversion step
+            if normalize_bool(contract_obj.get("cactus_format")):
+                try:
+                    contract_obj = odrl_formate_convert(contract_obj)
+                    print("\nAfter cactus ODRL conversion, contract_obj updated.")
+                except Exception:
+                    err = traceback.format_exc()
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"ODRL cactus conversion failed. Traceback: {err}",
+                    )
+
+            legal_contract = get_cactus_dsa_contract_text(contract_obj)
+
+            contract_obj['nlp'] = legal_contract
+
+            # save to DB
+            contract_obj.pop('id', None)
+            contract_result = await contracts_collection.insert_one(contract_obj)
+            contract_id = contract_result.inserted_id
+
+            client_pid = getattr(body.client_optional_info, "client_pid", None)
+            if client_pid:
+                print(
+                    f"contract {contract_id} created successfully for Negotiation {body.client_optional_info.client_pid} and saved in MongoDB\n\n")
+            else:
+                print(
+                    f"contract {contract_id} created successfully for Negotiation request and saved in MongoDB \n\n")
 
             return {
                 "message": "legal contract created successfully",
@@ -385,14 +622,23 @@ async def create_contract(
 async def update_contract(
         contract_id: str = Path(..., description="The ID of the Negotiation"),
         body: UpcastContractObject = Body(..., description="The contract object"),
+        current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
 
         # 1. check the current contract
-        await _varify_contract(contract_id)
+        existing_contract = await _varify_contract(contract_id, current_user)
 
         contract_obj = pydantic_to_dict(body, clean_id=True)
         contract_obj.pop('id', None)  # remove id item
+        # Preserve/update access metadata instead of dropping it on each update.
+        contract_obj["owner_user_id"] = existing_contract.get("owner_user_id", str(current_user.id))
+        contract_obj["owner_username_email"] = existing_contract.get("owner_username_email", current_user.username_email)
+        contract_obj["authorized_user_ids"] = sorted(
+            set(existing_contract.get("authorized_user_ids", []))
+            | set(_collect_contract_access_user_ids(contract_obj))
+            | {str(current_user.id)}
+        )
 
         # update the existing contract
         update_result = await contracts_collection.update_one(
@@ -421,6 +667,7 @@ async def update_contract(
             status_code=500, detail=f"Exception: {str(e)}. Traceback: {error_message}"
         )
 
+
 #
 @app.get(
     "/contract/get_request_body/{contract_id}",
@@ -428,18 +675,10 @@ async def update_contract(
 )
 async def get_request_body_for_legal_contract(
         contract_id: str = Path(..., description="The ID of the contract"),
+        current_user: AuthenticatedUser = Depends(get_current_user),
 ):
-    # 1. Validate & convert the ID
-    try:
-        obj_id = ObjectId(contract_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid contract id format, please try again")
-
-    # 2. Fetch from Mongo
-    doc = await contracts_collection.find_one({"_id": obj_id})
-
-    if not doc:
-        raise HTTPException(status_code=404, detail="Contract not found")
+    # Old code loaded the contract directly with ObjectId and did not check auth.
+    doc = await _varify_contract(contract_id, current_user)
 
         # 3) Serialize Mongo types and normalize _id -> id
     encoded = jsonable_encoder(
@@ -456,24 +695,16 @@ async def get_request_body_for_legal_contract(
     return UpcastContractObject(**encoded)
 
 
-
 @app.get(
     "/contract/get_contract/{contract_id}",
     summary="Review the legal contract",
 )
 async def get_legal_contract(
-    contract_id: str = Path(..., description="The ID of the contract"),
+        contract_id: str = Path(..., description="The ID of the contract"),
+        current_user: AuthenticatedUser = Depends(get_current_user),
 ):
-    # 1) Validate & convert the ID
-    try:
-        obj_id = ObjectId(contract_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid contract id format, please try again")
-
-    # 2) Fetch from Mongo
-    doc = await contracts_collection.find_one({"_id": obj_id})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Contract not found")
+    # Old code fetched the contract directly from Mongo without auth checks.
+    doc = await _varify_contract(contract_id, current_user)
 
     # 3) Ensure the contract text exists (adjust the key if yours is different)
     contract_text = doc.get("nlp", "")  # or doc.get("contract_text", "")
@@ -489,7 +720,6 @@ async def get_legal_contract(
             date: lambda v: v.isoformat(),
         },
     )
-
 
     # add your custom fields
     encoded["contractid"] = encoded.pop("_id", None)
@@ -522,18 +752,16 @@ async def get_legal_contract(
     return ordered
 
 
-
-
 @app.get(
     "/contract/getUpcastContract/{contract_id}",
     summary="Review a machine processable contract",
 )
 async def get_machine_processable_contract(
-    contract_id: str = Path(..., description="The ID of the contract"),
+        contract_id: str = Path(..., description="The ID of the contract"),
+        current_user: AuthenticatedUser = Depends(get_current_user),
 ):
-
     try:
-        contract_json = await get_legal_contract(contract_id)
+        contract_json = await get_legal_contract(contract_id, current_user)
     except HTTPException:
         raise
     except Exception as exc:
@@ -544,7 +772,6 @@ async def get_machine_processable_contract(
         contract_json.pop("definitions")
         contract_json.pop("custom_clauses")
         contract_json.pop("dpw")
-
 
         ttl_payload = contract_to_turtle(contract_json)
     except ValueError as exc:
@@ -563,8 +790,6 @@ async def get_machine_processable_contract(
     )
 
 
-
-
 @app.put(
     "/contract/sign_contract/{contract_id}",
     summary="Sign a contract",
@@ -572,8 +797,10 @@ async def get_machine_processable_contract(
 async def sign_contract(
         contract_id: str = Path(..., description="The ID of the contract"),
         body: UpcastSignatureObject = Body(..., description="The signature object"),
+        current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
+        contract = await _varify_contract(contract_id, current_user)
 
         user_role = getattr(body, "user_role")
         sig_val = getattr(body, f"{user_role}_signature")
@@ -587,6 +814,16 @@ async def sign_contract(
             f"{user_role}_signature": sig_val,
             f"{user_role}_signature_date": sig_date,
         }
+        # Tie the signature update back to the authenticated caller for auditing.
+        update_data["signed_by_user_id"] = str(current_user.id)
+        update_data["signed_by_username_email"] = current_user.username_email
+
+        # Prevent a consumer token from signing the provider field and vice versa
+        # when the contract already contains participant ids.
+        participant_key = f"{user_role}_id"
+        participant_value = (contract.get("contacts") or {}).get(user_role, {}).get(participant_key)
+        if participant_value and str(participant_value) != str(current_user.id):
+            raise HTTPException(status_code=403, detail=f"You cannot sign as {user_role}")
 
         print("update signature data: %r", update_data)
 
@@ -628,6 +865,7 @@ async def get_diffs_bet_two_contracts(
         response: Response,
         first_contract_id: str = Header(..., alias="first-contract-id", description="ID of the first contract"),
         second_contract_id: str = Header(..., alias="second-contract-id", description="ID of the second contract"),
+        current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     # 1) Validate ObjectIds
     try:
@@ -646,9 +884,7 @@ async def get_diffs_bet_two_contracts(
 
     # 2) Fetch both in one go
     try:
-        docs = await contracts_collection.find(
-            {"_id": {"$in": [first_oid, second_oid]}}
-        ).to_list(length=2)
+        docs = await contracts_collection.find({"_id": {"$in": [first_oid, second_oid]}}).to_list(length=2)
         doc_map = {doc["_id"]: doc for doc in docs}
 
         # Map correctly: first -> previous/base, second -> last/new
@@ -662,6 +898,11 @@ async def get_diffs_bet_two_contracts(
             if not last_doc:
                 missing.append(f"second ({second_contract_id})")
             raise HTTPException(status_code=404, detail=f"Contract not found for: {', '.join(missing)}")
+
+        if not _user_can_access_contract(previous_doc, current_user):
+            raise HTTPException(status_code=403, detail="You do not have permission to access the first contract")
+        if not _user_can_access_contract(last_doc, current_user):
+            raise HTTPException(status_code=403, detail="You do not have permission to access the second contract")
 
         # 3) Serialize & diff (ensure your pydantic_to_dict accepts plain dicts or adapt)
         previous_dict = pydantic_to_dict(previous_doc, True)
@@ -823,12 +1064,11 @@ def get_diff_for_clauses(req: TextDiffRequest) -> TextDiffResponse:
 )
 async def download_contract(
         contract_id: str = Path(..., description="The ID of the contract"),
+        current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
-
-        contract = await contracts_collection.find_one({"_id": ObjectId(contract_id), })
-        if not contract:
-            raise HTTPException(status_code=404, detail="contract not found")
+        # Old code loaded the contract directly from Mongo without auth checks.
+        contract = await _varify_contract(contract_id, current_user)
 
         # obtain textual infor from contract collection
         contract_text = contract.get("nlp", "")
@@ -876,6 +1116,7 @@ async def download_contract(
         raise HTTPException(
             status_code=500, detail=f"Exception: {str(e)}. Traceback: {error_message}"
         )
+
 
 #
 # @app.get(
@@ -964,7 +1205,8 @@ async def ensure_indexes():
 @app.get("/contract/search", response_model=SearchResponse,
          summary="Search contracts by metadata/clauses (no pagination)")
 async def search_contract(
-        keywords: str = Query(..., description="Search string (metadata, clauses, ODRL, contacts, etc.)")
+        keywords: str = Query(..., description="Search string (metadata, clauses, ODRL, contacts, etc.)"),
+        current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     q = keywords
     await ensure_indexes()
@@ -989,6 +1231,8 @@ async def search_contract(
     rx = re.compile(re.escape(q), re.IGNORECASE)
     results = []
     async for doc in cursor:
+        if not _user_can_access_contract(doc, current_user):
+            continue
         snippet = None
         nlp_text = doc.get("nlp")
         if isinstance(nlp_text, str):
@@ -1005,7 +1249,7 @@ async def search_contract(
             "base_info": doc.get("base_info"),
         })
 
-    return SearchResponse(total=total, results=results)
+    return SearchResponse(total=len(results), results=results)
 
 
 @app.get(
@@ -1020,17 +1264,10 @@ async def get_summary_for_contract(
             le=2000,
             description="Approximate number of WORDS for the summary (not tokens).",
         ),
+        current_user: AuthenticatedUser = Depends(get_current_user),
 ):
-    # 1) Validate & convert the ID
-    try:
-        obj_id = ObjectId(contract_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid contract id format, please try again")
-
-    # 2) Fetch from Mongo
-    contract = await contracts_collection.find_one({"_id": obj_id})
-    if not contract:
-        raise HTTPException(status_code=404, detail="Contract not found")
+    # Old code fetched the contract directly from Mongo without auth checks.
+    contract = await _varify_contract(contract_id, current_user)
 
     # 3) Pull NL text
     contract_text = (contract.get("nlp") or "").strip()
@@ -1112,16 +1349,11 @@ def find_changes(old: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
             summary="Delete a contract")
 async def delete_contracts_for_negotiation(
         contract_id: str = Path(..., description="The ID of the negotiation"),
+        current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     # 1. Convert and verify the contract exists
-    try:
-        oid = ObjectId(contract_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid contract ID format!!")
-
-    contract = await contracts_collection.find_one({"_id": oid})
-    if not contract:
-        raise HTTPException(status_code=404, detail="Contract not found")
+    contract = await _varify_contract(contract_id, current_user)
+    oid = ObjectId(contract_id)
 
     # 2. Delete the contract document
     result = await contracts_collection.delete_one({"_id": oid})

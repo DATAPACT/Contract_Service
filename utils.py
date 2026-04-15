@@ -389,7 +389,7 @@ def text_to_pdf_bytes(
     text = (text or "").replace("\u25A0", "").expandtabs(4)
     lines = text.splitlines()
     print("contract_type", contract_type)
-    is_dsa = contract_type == "dsa"
+    is_dsa = contract_type in {"dsa", "cactus_dsa"}
     is_consent = contract_type in {"consent_contract", "pda"}
     signature_images = {
         "provider": data_url_to_imagereader(provider_signature),
@@ -1262,10 +1262,12 @@ def extract_rules(rule_list, rule_key, definitions: dict = None):
                 f"{random.choice(exclusively_list)} for the purpose of {purpose_name}{(', ' + purposerefinements) if purposerefinements else ''}"
                 f"{constraint_clause}."
             )
-            guidance = (
-                f" Party B shall ensure all {action_name} methods comply with applicable data-protection standards "
-                f"and shall retain documentation of the techniques applied."
-            )
+            # guidance = (
+            #     f" Party B shall ensure all {action_name} methods comply with applicable data-protection standards "
+            #     f"and shall retain documentation of the techniques applied."
+            # )
+
+            guidance = ""
         elif rule_key == "prohibition":
             sentence = (
                 f"{rule_key_index}Party B{(', ' + actorrefinements + ',') if actorrefinements else ''} {modal_verb}Party A "
@@ -1621,9 +1623,19 @@ def contract_to_turtle(contract: Dict[str, Any], include_contract_node: bool = F
     def _coerce_datetime_literal(raw: Any):
         if raw is None:
             return None
-        text = str(raw).strip()
+        if isinstance(raw, datetime):
+            text = raw.isoformat()
+        elif isinstance(raw, date):
+            text = f"{raw.isoformat()}T00:00:00"
+        else:
+            text = str(raw).strip()
         if not text:
             return None
+        if "T" not in text:
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+                text = f"{text}T00:00:00"
+            elif " " in text:
+                text = text.replace(" ", "T", 1)
         return Literal(text, datatype=XSD.dateTime)
 
     def _convert_right_operand(left_uri: Optional[URIRef], raw_value: Any):
@@ -1863,3 +1875,20 @@ def _to_bytes(obj) -> bytes:
     except Exception:
         # Last-resort fallback: string-coerce
         return str(obj).encode("utf-8")
+
+
+def _money_gbp(price):
+    p = str(price).strip()
+    if not p:
+        return ""
+    if p.startswith("£"):
+        return p
+    return f"£{p}"
+
+def _money_eur(price):
+    p = str(price).strip()
+    if not p:
+        return ""
+    if p.startswith("€"):
+        return p
+    return f"€{p}"
