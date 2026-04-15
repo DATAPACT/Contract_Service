@@ -2,7 +2,10 @@ import re
 from datetime import datetime
 import re
 from datetime import datetime, date
-from utils import create_odrl_decription, scrub_definitions
+
+from sympy.integrals.meijerint_doc import category
+
+from utils import create_odrl_decription, scrub_definitions, _money_eur
 
 
 # version 1,  11-09-2025
@@ -113,7 +116,7 @@ def get_consent_contract_text(data):
         p = norm_keys(p)
         lines = ["\t\tA2.1 Data Provider"]
         lines.append(bullet("Full name", pick(p, "full_name", "name")))
-        lines.append(bullet("Email", pick(p, "email", "user_email")))
+        lines.append(bullet("Email", pick(p, "username_email", "user_email")))
         lines.append(bullet("Phone", pick(p, "phone", "telephone", "tel")))
         lines.append(bullet("Address", pick(p, "address", "residential_address", "registered_address")))
         lines.append("")
@@ -125,7 +128,7 @@ def get_consent_contract_text(data):
         lines.append(bullet("Organization", pick(c, "organization", "company_name", "name")))
         lines.append(bullet("Contact Person", pick(c, "contact_person", "contact_name", "name")))
         lines.append(bullet("Role/Title", pick(c, "position_title", "role", "title", "position")))
-        lines.append(bullet("Email", pick(c, "email", "user_email")))
+        lines.append(bullet("Email", pick(c, "username_email", "user_email")))
         lines.append(bullet("Phone", pick(c, "phone", "telephone", "tel")))
         lines.append(bullet("Address", pick(c, "address", "registered_address", "postal_address")))
         lines.append("")
@@ -139,7 +142,7 @@ def get_consent_contract_text(data):
         bits = []
         if title or price:
             t = f'"{title}"' if title else "the data"
-            price_txt = f" at a price of £{0.00}" if str(price).strip() else ""
+            price_txt = f" at a price of €{0.00}" if str(price).strip() else ""
             # price_txt = f" at a price of £{price}" if str(price).strip() else ""
             bits.append(f'The Data to be processed under this Agreement is {t}{price_txt}.')
         if description:
@@ -172,6 +175,8 @@ def get_consent_contract_text(data):
     d = data or {}
     client_optional_info = norm_keys(d.get("client_optional_info", {}) or {})
     definitions = d.get("definitions", {}) or {}
+    custom_definitions = d.get("custom_definitions") or {}
+    definitions.update(custom_definitions)
     # policy_summary  = d.get("odrl_policy_summary", {}) or {}
     odrl = d.get("odrl", {}) or {}
     custom_clauses = d.get("custom_clauses", {}) or {}
@@ -219,24 +224,33 @@ def get_consent_contract_text(data):
     data_format = coalesce(gv(resource_desc, "data_format"))
     data_size = coalesce(gv(resource_desc, "data_size"))
     tags = gv(resource_desc, "tags", "")
+    categories = gv(resource_desc, "categories", "[please insert categories]")
+    themes = gv(resource_desc, "themes")
+
+
+    language = coalesce(gv(resource_desc, "language"))
+    temporal_coverage = coalesce(gv(resource_desc, "temporal_coverage"))
+    geographic_scope = coalesce(gv(resource_desc, "geographic_scope"))
+
 
     # Contacts (provider is individual; consumer is org)
     cp = norm_keys(contacts.get("provider", {}) or contacts.get("data_provider", {}) or {})
     cc = norm_keys(contacts.get("consumer", {}) or contacts.get("data_consumer", {}) or {})
 
-    provider_fullname = coalesce(cp.get("full_name"), cp.get("name"), "…")
-    provider_citizen = coalesce(cp.get("citizenship"), cp.get("citizen"), "…")
+    provider_fullname = coalesce(cp.get("full_name"), cp.get("name"), "(please provide full name)")
+    provider_citizen = coalesce(cp.get(""
+                                       ""), cp.get("citizen"), "(please provide citizenship)")
 
-    provider_pid = coalesce(cp.get("passport_id"), cp.get("passport_no"), cp.get("id_no"), "…")
-    provider_addr = coalesce(cp.get("address"), cp.get("registered_address"), "…")
+    provider_pid = coalesce(cp.get("passport_id"), cp.get("passport_no"), cp.get("id_no"), "(please provide passport/ID number)")
+    provider_addr = coalesce(cp.get("address"), cp.get("registered_address"), "(please provide address)")
 
-    consumer_org = coalesce(cc.get("organization"), cc.get("company_name"), cc.get("name"), "…")
+    consumer_org = coalesce(cc.get("organization"), cc.get("company_name"), cc.get("name"), "(please provide organization name)")
     consumer_title = coalesce(cc.get("type"), cc.get("distinctive_title")).upper()
-    consumer_incorp = coalesce(cc.get("incorporation"), cc.get("country"), "…")
-    consumer_addr = coalesce(cc.get("address"), "…")
-    consumer_vat = coalesce(cc.get("vat_no"), "…")
-    consumer_rep = coalesce(cc.get("name"), "…")
-    consumer_rep_role = coalesce(cc.get("position_title"), cc.get("role"), cc.get("position"), "…")
+    consumer_incorp = coalesce(cc.get("incorporation"), cc.get("country"), "(please provide place of incorporation)")
+    consumer_addr = coalesce(cc.get("address"), "(please provide address)")
+    consumer_vat = coalesce(cc.get("vat_no"), "(please provide vat number)")
+    consumer_rep = coalesce(cc.get("name"), "(please provide representative name)")
+    consumer_rep_role = coalesce(cc.get("position_title"), cc.get("role"), cc.get("position"), "(please provide representative role)")
 
     # Consent revocation / rights email: prefer a dedicated field, else consumer notices
     rights_email = coalesce(
@@ -247,7 +261,7 @@ def get_consent_contract_text(data):
     # Signature term text
     validity_period = d.get("validity_period")
     if validity_period in (None, "", {}):
-        term_text = "… months from the Effective Date, unless earlier terminated in accordance with this Agreement."
+        term_text = "(please provide term duration) months from the Effective Date, unless earlier terminated in accordance with this Agreement."
     else:
         try:
             months = int(validity_period)
@@ -318,10 +332,6 @@ each hereinafter referred to as the “Party” and jointly both of the above th
         \t1.3. This Agreement includes a human-readable section, which constitutes the legally binding contract between the Parties, and a corresponding Machine-Readable (MR) section, provided in the Appendix A1, to facilitate automated processing and enforcement.
         """
 
-
-
-
-
     ctx.append(scope.strip() + "\n")
 
     # 2. DEFINITIONS
@@ -360,8 +370,18 @@ each hereinafter referred to as the “Party” and jointly both of the above th
         title, price, uri, policy_url, eco_gen, eco_srv,
         description, type_of_data, data_format, data_size, tags
     ))
-    ctx.append(
+
+    if geographic_scope and temporal_coverage:
+        ctx.append(
+            f"\t4.2. This data set contains the performance indicators of marketing campaigns in [{geographic_scope}] "
+            f"concerning the {categories} business verticals within the defined time period {temporal_coverage}. "
+            "The information provided at keyword level offer the possibility of generating detail description of the society interests and trends.\n")
+        ctx.append("\t4.3. The Machine-Readable (MR) version of the description of data (including its URI, description, format, size, associated tags, and environmental cost metrics) is presented in the Appendix A1.\n")
+
+    else:
+        ctx.append(
         "\t4.2. The Machine-Readable (MR) version of the description of data (including its URI, description, format, size, associated tags, and environmental cost metrics) is presented in the Appendix A1.\n")
+
 
     # 5. DATA USE – PERMITTED PURPOSES
     ctx.append("5. DATA USE – PERMITTED PURPOSES.")
@@ -748,505 +768,7 @@ Duly authorised for and on behalf of {consumer_org}
     return "\n".join(ctx)
 
 
-def get_ca_contract_json(data, *, include_text: bool = False, include_predefined_texts: bool = True):
-    """
-    Build a machine-processable JSON for the DATA CONSENT AGREEMENT.
 
-    Mirrors get_consent_contract_text structure:
-      TOC: Preamble → 1..17 (Signatures) → 18. Appendix
-        A1: (1) ODRL Rules, (2) Data Resource Description (NO DPW)
-        A2: Communication and Persons in Charge
-
-    Flags:
-      - include_text: embed the human-readable contract text (calls get_consent_contract_text if available)
-      - include_predefined_texts: include canned 'text' blurbs in every section (1..17)
-    """
-    import re
-    from datetime import datetime
-    from utils import create_odrl_decription, scrub_definitions
-
-    # ---------------- helpers (aligned with your generators) ----------------
-    def gv(d, k, default=""):
-        d = d or {}
-        return d.get(k, d.get(k.replace(" ", "_"), default))
-
-    def norm_keys(d):
-        return {str(k).lower().replace(" ", "_"): v for k, v in (d or {}).items()}
-
-    def pick(d, *keys):
-        for k in keys:
-            if k in d and d[k] not in (None, ""):
-                return d[k]
-        return ""
-
-    def coalesce(*vals):
-        for v in vals:
-            if isinstance(v, str) and v.strip():
-                return v
-            if v not in (None, "", {}):
-                return v
-        return ""
-
-    def _to_str(maybe_list):
-        if isinstance(maybe_list, list):
-            return ", ".join(map(str, maybe_list))
-        return "" if maybe_list is None else str(maybe_list)
-
-    def fmt_humandate(dt_str):
-        if not dt_str:
-            return None
-        s = str(dt_str).strip()
-        s = re.sub(r"\s+", "", s)
-        fmts = [
-            "%Y-%m-%dT%H:%M:%S.%f%z",
-            "%Y-%m-%dT%H:%M:%S.%f",
-            "%Y-%m-%dT%H:%M:%S%z",
-            "%Y-%m-%dT%H:%M:%S",
-            "%Y-%m-%d",
-            "%d%B%Y",
-            "%d%b%Y",
-            "%d-%m-%Y",
-        ]
-        for f in fmts:
-            try:
-                dt = datetime.strptime(s, f)
-                return dt.strftime("%d %B %Y")
-            except Exception:
-                pass
-        return s
-
-    def parse_iso_date(dt_str):
-        if not dt_str:
-            return None
-        s = str(dt_str).strip()
-        s = re.sub(r"\s+", "", s)
-        fmts = [
-            "%Y-%m-%dT%H:%M:%S.%f%z",
-            "%Y-%m-%dT%H:%M:%S.%f",
-            "%Y-%m-%dT%H:%M:%S%z",
-            "%Y-%m-%dT%H:%M:%S",
-            "%Y-%m-%d",
-            "%d%B%Y",
-            "%d%b%Y",
-            "%d-%m-%Y",
-        ]
-        for f in fmts:
-            try:
-                dt = datetime.strptime(s, f)
-                return dt.date().isoformat()
-            except Exception:
-                pass
-        return None
-
-    def human_today_london():
-        try:
-            from zoneinfo import ZoneInfo
-            today = datetime.now(ZoneInfo("Europe/London")).date()
-        except Exception:
-            today = datetime.now().date()
-        return today.strftime("%d %B %Y")
-
-    def now_iso():
-        try:
-            return datetime.now().astimezone().isoformat()
-        except Exception:
-            return datetime.utcnow().isoformat() + "Z"
-
-    def _flatten_constraints(items):
-        """Flatten ODRL constraints supporting {'and':[...]} / {'or':[...]} groupings."""
-        flat = []
-        if not items:
-            return flat
-
-        def _walk(obj):
-            if isinstance(obj, dict):
-                if {"leftOperand", "operator", "rightOperand"} <= obj.keys():
-                    flat.append({
-                        "leftOperand": obj.get("leftOperand"),
-                        "operator": obj.get("operator"),
-                        "rightOperand": obj.get("rightOperand"),
-                    })
-                else:
-                    for k in ("and", "or"):
-                        if k in obj and isinstance(obj[k], list):
-                            for x in obj[k]:
-                                _walk(x)
-            elif isinstance(obj, list):
-                for x in obj:
-                    _walk(x)
-
-        _walk(items)
-        return flat
-
-    def _normalize_ref_value(value):
-        """
-        Normalize action / assignee / target:
-          - simple -> {"value": "<string>"} (lists joined)
-          - dict with '@type'/'source'/'refinement' -> keep typed fields; refinements normalized
-        """
-        if not isinstance(value, dict):
-            return {"value": _to_str(value)}
-        out = {}
-        if "@type" in value:
-            out["@type"] = value.get("@type")
-        if "source" in value:
-            out["source"] = value.get("source")
-        refs = value.get("refinement") or []
-        clean_refs = []
-        for r in refs if isinstance(refs, list) else []:
-            op = r.get("operator")
-            if not op:
-                continue
-            clean_refs.append({
-                "leftOperand": _to_str(r.get("leftOperand", "")),
-                "operator": _to_str(op),
-                "rightOperand": _to_str(r.get("rightOperand", "")),
-            })
-        if clean_refs:
-            out["refinement"] = clean_refs
-        fallback_keys = [k for k in value.keys() if k not in {"@type", "source", "refinement"}]
-        if not out and fallback_keys:
-            return {"value": value}
-        return out or {"value": ""}
-
-    RULE_IRI = {
-        "permission": "http://www.w3.org/ns/odrl/2/Permission",
-        "prohibition": "http://www.w3.org/ns/odrl/2/Prohibition",
-        "obligation": "http://www.w3.org/ns/odrl/2/Obligation",
-        "duty": "http://www.w3.org/ns/odrl/2/Duty",
-    }
-
-    # ---------------- unpack / normalize inputs ----------------
-    d = data or {}
-    client_optional_info = norm_keys(d.get("client_optional_info", {}) or {})
-    definitions = d.get("definitions", {}) or {}
-    odrl = d.get("odrl", {}) or {}
-    custom_clauses = d.get("custom_clauses", {}) or {}
-    if not isinstance(custom_clauses, dict):
-        custom_clauses = {}
-    resource_desc = norm_keys(d.get("resource_description", {}))
-    contacts = d.get("contacts", {}) or {}
-
-    # ODRL policy summary (permission-focused in §7, but we still compute full summary)
-    policy_summary = {}
-    try:
-        ps = create_odrl_decription(odrl, definitions)
-        if isinstance(ps, dict):
-            policy_summary = ps
-    except Exception:
-        policy_summary = {}
-
-    # Scrub definitions (if helper available)
-    try:
-        definitions = scrub_definitions(definitions)
-    except Exception:
-        pass
-
-    # Dates/meta
-    updated_at = coalesce(gv(client_optional_info, "updated_at"))
-    effective_human = fmt_humandate(d.get("effective_date")) or fmt_humandate(updated_at) or human_today_london()
-    effective_iso = parse_iso_date(d.get("effective_date")) or parse_iso_date(updated_at)
-
-    # Resource fields (note: price usually not relevant for consent; we still pass through if present)
-    title = coalesce(gv(resource_desc, "title"))
-    price = coalesce(gv(resource_desc, "price"))
-    uri = coalesce(gv(resource_desc, "uri"))
-    policy_url = coalesce(gv(resource_desc, "policy_url"))
-    eco_gen = coalesce(gv(resource_desc, "environmental_cost_of_generation"))
-    eco_srv = coalesce(gv(resource_desc, "environmental_cost_of_serving"))
-    description = coalesce(gv(resource_desc, "description"))
-    type_of_data = coalesce(gv(resource_desc, "type_of_data"))
-    data_format = coalesce(gv(resource_desc, "data_format"))
-    data_size = coalesce(gv(resource_desc, "data_size"))
-    tags = gv(resource_desc, "tags", "")
-
-    # Contacts (provider = individual; consumer = organization)
-    cp = norm_keys(contacts.get("provider", {}) or contacts.get("data_provider", {}) or {})
-    cc = norm_keys(contacts.get("consumer", {}) or contacts.get("data_consumer", {}) or {})
-
-    provider = {
-        "full_name": coalesce(cp.get("full_name"), cp.get("name")),
-        "citizenship": coalesce(cp.get("citizenship"), cp.get("citizen")),
-        "passport_or_id_no": coalesce(cp.get("passport_id"), cp.get("passport_no"), cp.get("id_no")),
-        "email": coalesce(cp.get("email"), cp.get("user_email")),
-        "phone": coalesce(cp.get("phone")),
-        "address": coalesce(cp.get("address"), cp.get("registered_address")),
-    }
-
-    consumer = {
-        "organization": coalesce(cc.get("organization"), cc.get("company_name"), cc.get("name")),
-        "distinctive_title": (coalesce(cc.get("type"), cc.get("distinctive_title")) or "").upper(),
-        "incorporation": coalesce(cc.get("incorporation"), cc.get("country")),
-        "registered_address": coalesce(cc.get("registered_address"), cc.get("address")),
-        "vat_no": coalesce(cc.get("vat_no")),
-        "contact_person": coalesce(cc.get("contact_person"), cc.get("name")),
-        "position_title": coalesce(cc.get("position_title"), cc.get("role"), cc.get("position")),
-        "email": coalesce(cc.get("email"), cc.get("user_email")),
-        "phone": coalesce(cc.get("phone")),
-        "address": coalesce(cc.get("address")),
-    }
-
-    # Rights / revocation email
-    rights_email = coalesce(consumer.get("email"), "…")
-
-    # Term (months) for signature sentence
-    validity_period = d.get("validity_period")
-    if validity_period in (None, "", {}):
-        term_text = "… months from the Effective Date, unless earlier terminated in accordance with this Agreement."
-        validity_months = None
-    else:
-        try:
-            validity_months = int(validity_period)
-            term_text = f"{validity_months} months from the Effective Date, unless earlier terminated in accordance with this Agreement."
-        except Exception:
-            validity_months = None
-            term_text = f"{validity_period} from the Effective Date, unless earlier terminated in accordance with this Agreement."
-
-    # ---------------- normalized ODRL (A1) ----------------
-    def build_odrl_rules():
-        out = {}
-        for rule_type in ("permission", "prohibition", "obligation", "duty"):
-            rules = (odrl or {}).get(rule_type, []) or []
-            if not rules:
-                continue
-            bucket = []
-            for rule in rules:
-                action_val = rule.get("action", "")
-                # Prefer 'assignee'; do NOT emit 'assigner'
-                assignee_val = rule.get("assignee") or rule.get("actor") or ""
-                target_val = rule.get("target", "")
-
-                action_norm = _normalize_ref_value(action_val)
-                assignee_norm = _normalize_ref_value(assignee_val)
-                target_norm = _normalize_ref_value(target_val)
-
-                # constraints + purpose (optional)
-                all_constraints_raw = rule.get("constraint", []) or rule.get("constraints", []) or []
-                flat_constraints = _flatten_constraints(all_constraints_raw)
-
-                purpose = None
-                rest_constraints = []
-                if flat_constraints:
-                    purpose_idx = None
-                    for i, c in enumerate(flat_constraints):
-                        left = str(c.get("leftOperand", "")).lower()
-                        tail = left.rsplit("/", 1)[-1]
-                        if left == "purpose" or tail == "purpose" or left.endswith("purpose"):
-                            purpose_idx = i
-                            break
-                    if purpose_idx is None:
-                        rest_constraints = flat_constraints
-                    else:
-                        purpose = _to_str(flat_constraints[purpose_idx].get("rightOperand", ""))
-                        rest_constraints = [c for j, c in enumerate(flat_constraints) if j != purpose_idx]
-
-                bucket.append({
-                    "type": RULE_IRI.get(rule_type, rule_type),
-                    "action": action_norm,
-                    "assignee": assignee_norm,
-                    "target": target_norm,
-                    **({"purpose": purpose} if purpose else {}),
-                    **({"constraints": rest_constraints} if rest_constraints else {}),
-                })
-            if bucket:
-                out[rule_type] = bucket
-        return out
-
-    odrl_a1 = build_odrl_rules()
-
-    # Permission-only list for section 7 body (convenience for renderers)
-    permission_only = policy_summary.get("permission", []) if isinstance(policy_summary, dict) else []
-
-    # ---------------- predefined texts (1..18) ----------------
-    _title_for_text = title if title else "…"
-    _rights_email = rights_email if rights_email else "…"
-
-    text_1 = (
-        "The Parties enter into this Data Consent Agreement to enable the sharing and processing of Data for the "
-        "Permitted Purpose(s) and to ensure appropriate safeguards. The Agreement includes a human-readable contract and "
-        "a Machine-Readable (MR) section in Appendix A1."
-    )
-    text_2 = (
-        "Key data protection terms have the meanings assigned by applicable legislation (e.g., GDPR). "
-        "Custom terms used herein and in Appendix A1 are defined in this section."
-    )
-    text_3 = (
-        "The purpose of this Agreement is to define the terms and conditions under which the Data Provider grants consent "
-        "for the Data Consumer to process the data, as further detailed herein. The Data Provider may revoke consent at any "
-        f"time by emailing {_rights_email}, without prejudice to the lawfulness of processing before revocation."
-    )
-    text_4 = (
-        "This section describes the Data to be processed (title, URI, format/size, tags, environmental metrics if any). "
-        "A Machine-Readable version of this description is provided in Appendix A1."
-    )
-    text_5 = (
-        "The Data shall be used solely for the permitted purpose(s) set out in Clauses 7 and 8. Any other use requires "
-        "prior written consent of the Data Provider."
-    )
-    text_6 = (
-        "The Data Consumer must comply with applicable data protection law and implement appropriate safeguards "
-        "(necessity, confidentiality, integrity, availability). The Data Provider should ensure the Data is accurate and current. "
-        "No disclosure to third parties without prior written consent unless required by law."
-    )
-    text_7 = (
-        "The Parties must comply with the permission rules listed here. A Machine-Readable version of policies and rules "
-        "is provided in Appendix A1."
-    )
-    text_8 = (
-        "In addition to the standard policies in Clause 7, the Parties may agree upon custom arrangements recorded in this section."
-    )
-    text_9 = (
-        "Data Provider rights include access, rectification, deletion, restriction, portability and objection. "
-        f"Requests may be sent to {_rights_email}. Additional GDPR rights and timelines apply as set out herein."
-    )
-    text_10 = (
-        "The Data Consumer shall implement and maintain appropriate technical and organisational measures, ensure secure "
-        "transmission, and log data transfers. Encryption in transit is required."
-    )
-    text_11 = (
-        "The Data Consumer must keep all Data confidential. Both Parties must maintain confidentiality regarding the "
-        "Agreement and related information; obligations survive termination."
-    )
-    text_12 = (
-        "Each Party is liable for its acts and omissions (including those of personnel and subcontractors) and must "
-        "compensate the other for damages arising from breaches of this Agreement."
-    )
-    text_13 = (
-        "Parties shall communicate via the contacts listed in Appendix A2. Changes must be notified without delay. "
-        "Email and postal/courier notice rules apply as stated herein."
-    )
-    text_14 = (
-        "If any term is invalid or unenforceable, the remainder of the Agreement remains effective. Amendments require "
-        "a written agreement. In case of conflict, this Agreement prevails over prior instruments; this Agreement governs over the Appendices."
-    )
-    text_15 = (
-        "Disputes should first be resolved amicably. Failing that, the courts of the country in which the Data Provider is "
-        "located have exclusive jurisdiction."
-    )
-    text_16 = (
-        "This Agreement and related non-contractual obligations are governed by the laws of the country in which the "
-        "Data Provider is located. Each Party submits to that jurisdiction."
-    )
-    text_17 = (
-        f"This Agreement takes effect on the Effective Date and remains in force for {term_text} "
-        "Signature blocks appear in the human-readable contract."
-    )
-    text_18 = (
-        "Appendix A1 (Machine Readable) contains the normalized ODRL rules and the data resource description. "
-        "Appendix A2 contains contact details for both Parties."
-    )
-
-    # ---------------- assemble final JSON ----------------
-    contract_json = {
-        "meta": {
-            "generated_at": now_iso(),
-            "generator": "UPCAST Consent JSON v1",
-            "effective_date": {
-                "human": effective_human,
-                "iso": effective_iso,
-            },
-        },
-        "parties": {
-            "provider_individual": provider,
-            "consumer_organization": consumer,
-        },
-        "term": {
-            "validity_period_months": validity_months,
-            "term_text": term_text
-        },
-        "sections": {
-            "1_scope_of_application": {**({"text": text_1} if include_predefined_texts else {})},
-            "2_definitions": {
-                "fixed_terms_gdpr": [
-                    "personal data", "data subject", "processing", "data controller",
-                    "data processor", "third party", "consent", "data breach",
-                    "security incident", "supervisory authority"
-                ],
-                "custom_terms": definitions,
-                **({"text": text_2} if include_predefined_texts else {})
-            },
-            "3_purpose_of_the_agreement": {
-                "revocation_email": rights_email,
-                **({"text": text_3} if include_predefined_texts else {})
-            },
-            "4_description_of_data": {
-                "title": title or None,
-                "price_gbp": price or None,  # often None for consent
-                "uri": uri or None,
-                "policy_url": policy_url or None,
-                "description": description or None,
-                "type_of_data": type_of_data or None,
-                "data_format": data_format or None,
-                "data_size": data_size or None,
-                "tags": tags or None,
-                "environment": {
-                    "environmental_cost_of_generation": eco_gen or None,
-                    "environmental_cost_of_serving": eco_srv or None
-                },
-                **({"text": text_4} if include_predefined_texts else {})
-            },
-            "5_data_use_permitted_purposes": {**({"text": text_5} if include_predefined_texts else {})},
-            "6_general_obligations_of_the_parties": {**({"text": text_6} if include_predefined_texts else {})},
-            "7_policies_and_rules": {
-                "permission_only": permission_only,
-                **({"text": text_7} if include_predefined_texts else {})
-            },
-            "8_custom_arrangements": {
-                "custom_clauses": custom_clauses or {},
-                **({"text": text_8} if include_predefined_texts else {})
-            },
-            "9_data_protection": {
-                "rights_contact_email": rights_email,
-                **({"text": text_9} if include_predefined_texts else {})
-            },
-            "10_technical_and_organisational_security_measures_data_sharing_mechanisms": {
-                **({"text": text_10} if include_predefined_texts else {})
-            },
-            "11_confidentiality": {**({"text": text_11} if include_predefined_texts else {})},
-            "12_liability": {**({"text": text_12} if include_predefined_texts else {})},
-            "13_contact": {**({"text": text_13} if include_predefined_texts else {})},
-            "14_other_provisions": {**({"text": text_14} if include_predefined_texts else {})},
-            "15_dispute_resolution": {**({"text": text_15} if include_predefined_texts else {})},
-            "16_governing_law_and_jurisdiction": {**({"text": text_16} if include_predefined_texts else {})},
-            "17_signatures": {**({"text": text_17} if include_predefined_texts else {})},
-            "18_appendix": {**({"text": text_18} if include_predefined_texts else {})},
-        },
-        "policies": {
-            "odrl_policy_summary": policy_summary or {},
-            "custom_clauses": custom_clauses or {}
-        },
-        "appendix": {
-            "A1_machine_readable": {
-                "odrl": odrl_a1,
-                "resource_description": d.get("resource_description", {}) or {}
-                # DPW intentionally omitted for consent agreement
-            },
-            "A2_communication_and_persons_in_charge": {
-                "provider": {
-                    "full_name": provider["full_name"],
-                    "email": provider["email"],
-                    "phone": provider["phone"],
-                    "address": provider["address"]
-                },
-                "consumer": {
-                    "organization": consumer["organization"],
-                    "contact_person": consumer["contact_person"],
-                    "position_title": consumer["position_title"],
-                    "email": consumer["email"],
-                    "phone": consumer["phone"],
-                    "address": consumer["address"]
-                }
-            }
-        }
-    }
-
-    if include_text:
-        try:
-            contract_json["contract_text"] = get_consent_contract_text(d)
-        except Exception:
-            contract_json["contract_text"] = None
-
-    return contract_json
 
 
 import json
@@ -1267,12 +789,11 @@ def save_ca_outputs(
     """
     # Uses your existing function
     text = get_consent_contract_text(data)
-    obj = get_ca_contract_json(data, include_text=include_text_inside_json)
+
 
     with open(text_path, "w", encoding="utf-8") as f:
         f.write(text)
 
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=False, indent=json_indent)
+
 
     return text_path, json_path
