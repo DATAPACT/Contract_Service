@@ -4,7 +4,13 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="82c7e697-05d9-446e-8f3d-aa7feec3c757" name="Changes" comment="" />
+    <list default="true" id="82c7e697-05d9-446e-8f3d-aa7feec3c757" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/contract-service.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/contract-service.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/contract_service_api.py" beforeDir="false" afterPath="$PROJECT_DIR$/contract_service_api.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/env_example" beforeDir="false" afterPath="$PROJECT_DIR$/env_example" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -44,7 +50,7 @@
       <window_info id="Commit_Guest" show_stripe_button="false" />
       <window_info id="Pull Requests" />
       <window_info id="Learn" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.18846568" />
+      <window_info content_ui="combo" id="Project" order="0" weight="0.1887372" />
       <window_info id="Commit" order="1" weight="0.25" />
       <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Database Changes" />
@@ -93,6 +99,7 @@
       <option name="presentableId" value="Default" />
       <updated>1776257026794</updated>
       <workItem from="1776257027894" duration="1483000" />
+      <workItem from="1776418700721" duration="4709000" />
     </task>
     <servers />
   </component>
