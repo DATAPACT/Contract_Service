@@ -14,14 +14,11 @@ KEYCLOAK_ISSUER=https://your-keycloak-host/realms/your-realm
 KEYCLOAK_JWKS_URL=https://your-keycloak-host/realms/your-realm/protocol/openid-connect/certs
 KEYCLOAK_AUDIENCE=contract-service
 KEYCLOAK_CLIENT_ID=contract-service
+# Optional: set when the Keycloak client is confidential and requires a secret
+KEYCLOAK_CLIENT_SECRET=your_keycloak_client_secret
 
-# The contracts collection stays in the contract MongoDB above.
-# The platform users collection lives in the main MongoDB.
-USER_MONGO_USER=root
-USER_MONGO_PASSWORD=your_main_mongo_password
-USER_MONGO_HOST=mongo
-USER_MONGO_PORT=27017
-USER_MONGO_DB=upcast
+# Both contracts and users are stored in the same MongoDB.
+MONGO_DB=datapack
 
 API_CONTRACT_SERVICE_URL=http://your_machine_ip:8006
 

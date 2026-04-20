@@ -10,9 +10,8 @@ from html import escape
 from typing import Any, Dict, List, Literal, Optional
 
 import httpx
-import jwt
 from fastapi import Depends, FastAPI, Header, Body, HTTPException, Path, Query, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 from bson import ObjectId
 from dotenv import load_dotenv
 from fastapi.encoders import jsonable_encoder
@@ -23,6 +22,7 @@ from pydantic import BaseModel, Field, AliasChoices
 from pydantic import field_validator
 from pymongo import ASCENDING, TEXT
 
+from auth import AuthenticatedUser, verify_keycloak_token_and_get_current_user
 from ca_generation import get_consent_contract_text
 from dsa_generation import get_dsa_contract_text
 from cactus_dsa_generation import get_cactus_dsa_contract_text
@@ -41,7 +41,7 @@ load_dotenv(dotenv_path=".env")
 
 app = FastAPI(
     title="Contract Service API",
-    description="UPCAST Contract Service API",
+    description="DATAPACK Contract Service API",
     openapi_url="/openapi.json",
     docs_url=None,  # replaced by custom /docs with SSO postMessage support
     version="1.0",
@@ -50,17 +50,10 @@ app = FastAPI(
     #
     # New code:
     # do not apply the new Keycloak-specific global dependency here.
-    # This service already authenticates protected routes with get_current_user(),
+    # This service already authenticates protected routes with verify_keycloak_token_and_get_current_user(),
     # and those routes validate the same JWT issued by authentication-service.
 )
 
-# Old code:
-# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login/")
-#
-# New code still uses OAuth2PasswordBearer only to extract the incoming bearer
-# token from requests. The service no longer performs username/password login
-# itself; callers must obtain a Keycloak token before calling this API.
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login/")
 origins = [
     "*",
     "http://127.0.0.1:8866",
@@ -264,33 +257,10 @@ MONGO_USER = os.getenv("MONGO_USER")
 MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
 MONGO_HOST = os.getenv("MONGO_HOST", "localhost")
 MONGO_PORT = os.getenv("MONGO_PORT")
+MONGO_DB = os.getenv("MONGO_DB", "datapack")
 
-# Old code:
-# API_AUTHENTICATION_URL = os.getenv("API_AUTHENTICATION_URL")
-#
-# New code:
-# Contract service authenticates callers directly with Keycloak, so auth-service
-# is no longer the source of truth for token verification here.
-KEYCLOAK_ISSUER = (os.getenv("KEYCLOAK_ISSUER") or "").rstrip("/")
-KEYCLOAK_JWKS_URL = (os.getenv("KEYCLOAK_JWKS_URL") or "").strip()
-KEYCLOAK_AUDIENCE = (os.getenv("KEYCLOAK_AUDIENCE") or "").strip()
+KEYCLOAK_CLIENT_SECRET = (os.getenv("KEYCLOAK_CLIENT_SECRET") or "").strip()
 KEYCLOAK_CLIENT_ID = (os.getenv("KEYCLOAK_CLIENT_ID") or "").strip()
-KEYCLOAK_ALGORITHMS = [
-    algo.strip()
-    for algo in (os.getenv("KEYCLOAK_ALGORITHMS") or "RS256").split(",")
-    if algo.strip()
-]
-
-# Contracts stay in the dedicated contract MongoDB.
-# User profiles remain in the main platform MongoDB where the existing
-# `users` collection already lives.
-USER_MONGO_URI = (os.getenv("USER_MONGO_URI") or "").strip()
-USER_MONGO_USER = os.getenv("USER_MONGO_USER")
-USER_MONGO_PASSWORD = os.getenv("USER_MONGO_PASSWORD")
-USER_MONGO_HOST = os.getenv("USER_MONGO_HOST")
-USER_MONGO_PORT = os.getenv("USER_MONGO_PORT")
-USER_MONGO_DB = os.getenv("USER_MONGO_DB", "upcast")
-
 
 def _build_mongo_uri(user: Optional[str], password: Optional[str], host: Optional[str], port: Optional[str]) -> str:
     if port:
@@ -305,66 +275,15 @@ else:  # Assumption: The database is stored in mongodb cloud.
     MONGO_URI = _build_mongo_uri(MONGO_USER, MONGO_PASSWORD, MONGO_HOST, None)
 
 contracts_client = AsyncIOMotorClient(MONGO_URI)
-contracts_db = contracts_client.upcast
+contracts_db = contracts_client[MONGO_DB]
 contracts_collection = contracts_db.contracts  # contracts collection
 
 
-def _build_user_mongo_uri() -> str:
-    if USER_MONGO_URI:
-        return USER_MONGO_URI
-
-    # Old code:
-    # contract-service only knew about its own contracts MongoDB connection.
-    #
-    # New code:
-    # user profile lookup can use a separate MongoDB connection because the
-    # platform `users` collection lives in the main Mongo service.
-    if USER_MONGO_HOST and USER_MONGO_USER and USER_MONGO_PASSWORD:
-        return _build_mongo_uri(
-            USER_MONGO_USER,
-            USER_MONGO_PASSWORD,
-            USER_MONGO_HOST,
-            USER_MONGO_PORT,
-        )
-
-    return MONGO_URI
-
-
-users_client = AsyncIOMotorClient(_build_user_mongo_uri())
-users_db = users_client[USER_MONGO_DB]
-users_collection = users_db.users
-
-
-def _build_keycloak_jwks_url() -> str:
-    if KEYCLOAK_JWKS_URL:
-        return KEYCLOAK_JWKS_URL
-    if not KEYCLOAK_ISSUER:
+def _build_keycloak_token_url() -> str:
+    keycloak_issuer = (os.getenv("KEYCLOAK_ISSUER") or "").rstrip("/")
+    if not keycloak_issuer:
         raise HTTPException(status_code=500, detail="KEYCLOAK_ISSUER environment variable not set")
-    return f"{KEYCLOAK_ISSUER}/protocol/openid-connect/certs"
-
-
-_jwks_client: Optional[jwt.PyJWKClient] = None
-
-
-def _get_jwks_client() -> jwt.PyJWKClient:
-    global _jwks_client
-    if _jwks_client is None:
-        _jwks_client = jwt.PyJWKClient(_build_keycloak_jwks_url())
-    return _jwks_client
-
-
-class AuthenticatedUser(BaseModel):
-    id: str
-    keycloak_sub: Optional[str] = None
-    username_email: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    name: Optional[str] = None
-    type: Optional[str] = None
-    organization: Optional[Any] = None
-    roles: List[str] = Field(default_factory=list)
-    groups: List[str] = Field(default_factory=list)
-    is_admin: Optional[bool] = False
+    return f"{keycloak_issuer}/protocol/openid-connect/token"
 
 
 class AuthenticationRegisterUser(BaseModel):
@@ -382,220 +301,62 @@ class AuthenticationRegisterUser(BaseModel):
     position_title: Optional[str] = None
     phone: Optional[str] = None
 
-
-def _collect_keycloak_roles(claims: Dict[str, Any]) -> List[str]:
-    roles = set()
-    realm_access = claims.get("realm_access") or {}
-    for role in realm_access.get("roles") or []:
-        if role:
-            roles.add(str(role))
-
-    resource_access = claims.get("resource_access") or {}
-    for client_access in resource_access.values():
-        for role in (client_access or {}).get("roles") or []:
-            if role:
-                roles.add(str(role))
-
-    return sorted(roles)
-
-
-def _collect_keycloak_groups(claims: Dict[str, Any]) -> List[str]:
-    groups = claims.get("groups") or []
-    if isinstance(groups, list):
-        return sorted(str(group) for group in groups if group)
-    return []
+# @app.post("/user/register", summary="Deprecated local register endpoint")
+# async def register_user_via_authentication_service(
+#         user: AuthenticationRegisterUser,
+#         master_password_input: str,
+# ):
+#     # Old code:
+#     # this endpoint proxied user registration to authentication-service.
+#     #
+#     # New code:
+#     # contract-service no longer owns registration in the Keycloak architecture.
+#     # User creation must happen in Keycloak, and local Mongo user data is
+#     # provisioned automatically when the authenticated caller uses the API.
+#     raise HTTPException(
+#         status_code=501,
+#         detail="Direct registration is no longer supported here. Create users in Keycloak and call the API with a Keycloak bearer token.",
+#     )
 
 
-def _decode_keycloak_token(token: str) -> Dict[str, Any]:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    if not KEYCLOAK_ISSUER:
-        raise HTTPException(status_code=500, detail="KEYCLOAK_ISSUER environment variable not set")
-
-    try:
-        signing_key = _get_jwks_client().get_signing_key_from_jwt(token)
-        decode_kwargs = {
-            "key": signing_key.key,
-            "algorithms": KEYCLOAK_ALGORITHMS,
-            "issuer": KEYCLOAK_ISSUER,
-            "options": {"verify_aud": bool(KEYCLOAK_AUDIENCE or KEYCLOAK_CLIENT_ID)},
-        }
-        expected_audience = KEYCLOAK_AUDIENCE or KEYCLOAK_CLIENT_ID
-        if expected_audience:
-            decode_kwargs["audience"] = expected_audience
-        return jwt.decode(token, **decode_kwargs)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("Keycloak token verification failed: %s", exc)
-        raise credentials_exception
-
-
-async def _get_or_create_local_user_from_claims(claims: Dict[str, Any]) -> Dict[str, Any]:
-    keycloak_sub = claims.get("sub")
-    if not keycloak_sub:
-        raise HTTPException(status_code=401, detail="Keycloak token missing subject")
-
-    username_email = claims.get("email") or claims.get("preferred_username")
-    first_name = (claims.get("given_name") or "").strip() or None
-    last_name = (claims.get("family_name") or "").strip() or None
-    display_name = " ".join(part for part in [first_name, last_name] if part) or claims.get("name") or claims.get("preferred_username") or username_email
-    roles = _collect_keycloak_roles(claims)
-    groups = _collect_keycloak_groups(claims)
-    now = datetime.utcnow()
-
-    user = await users_collection.find_one({"$or": [{"keycloak_sub": keycloak_sub}, {"keycloak_user_id": keycloak_sub}]})
-
-    if not user and username_email:
-        # Old code:
-        # authentication-service returned the local Mongo user directly.
-        #
-        # New code:
-        # when migrating existing users to Keycloak, first try to match the
-        # existing user document by email and then bind it to the Keycloak `sub`.
-        user = await users_collection.find_one({"username_email": username_email})
-        if user:
-            await users_collection.update_one(
-                {"_id": user["_id"]},
-                {
-                    "$set": {
-                        "keycloak_sub": keycloak_sub,
-                        "first_name": first_name,
-                        "last_name": last_name,
-                        "name": display_name,
-                        "updated_at": now,
-                        "last_login_at": now,
-                    }
-                },
-            )
-            user = await users_collection.find_one({"_id": user["_id"]})
-
-    if not user:
-        # New code provisions a local placeholder business profile on first
-        # Keycloak login so partner systems can keep calling the contract API
-        # even before a GUI registration exists in MongoDB.
-        placeholder_value = "miss value"
-        username_email = username_email or f"{keycloak_sub}@missing.local"
-        first_name = first_name or placeholder_value
-        last_name = last_name or placeholder_value
-        display_name = " ".join(part for part in [first_name, last_name] if part) or placeholder_value
-        placeholder_type = claims.get("type") or placeholder_value
-        new_user = {
-            "keycloak_sub": keycloak_sub,
-            "first_name": first_name,
-            "last_name": last_name,
-            "name": display_name,
-            "type": placeholder_type,
-            "username_email": username_email,
-            "password": None,
-            "organization": [placeholder_value],
-            "incorporation": placeholder_value,
-            "address": placeholder_value,
-            "vat_no": placeholder_value,
-            "position_title": placeholder_value,
-            "phone": placeholder_value,
-            "roles": roles,
-            "groups": groups,
-            "created_at": now,
-            "updated_at": now,
-            "last_login_at": now,
-        }
-        logger.warning(
-            "Keycloak user %s (%s) is not registered in MongoDB. Creating placeholder local user with miss value defaults so contract processing can continue.",
-            keycloak_sub,
-            username_email,
-        )
-        insert_result = await users_collection.insert_one(new_user)
-        user = await users_collection.find_one({"_id": insert_result.inserted_id})
-    else:
-        update_fields = {
-            "updated_at": now,
-            "last_login_at": now,
-        }
-        if username_email and user.get("username_email") != username_email:
-            update_fields["username_email"] = username_email
-        if first_name and user.get("first_name") != first_name:
-            update_fields["first_name"] = first_name
-        if last_name and user.get("last_name") != last_name:
-            update_fields["last_name"] = last_name
-        if display_name and user.get("name") != display_name:
-            update_fields["name"] = display_name
-        if roles:
-            update_fields["roles"] = roles
-        if groups:
-            update_fields["groups"] = groups
-        if not user.get("keycloak_sub"):
-            update_fields["keycloak_sub"] = keycloak_sub
-        if update_fields:
-            await users_collection.update_one({"_id": user["_id"]}, {"$set": update_fields})
-            user = await users_collection.find_one({"_id": user["_id"]})
-
-    return user
-
-
-@app.post("/user/register", summary="Deprecated local register endpoint")
-async def register_user_via_authentication_service(
-        user: AuthenticationRegisterUser,
-        master_password_input: str,
-):
-    # Old code:
-    # this endpoint proxied user registration to authentication-service.
-    #
-    # New code:
-    # contract-service no longer owns registration in the Keycloak architecture.
-    # User creation must happen in Keycloak, and local Mongo user data is
-    # provisioned automatically when the authenticated caller uses the API.
-    raise HTTPException(
-        status_code=501,
-        detail="Direct registration is no longer supported here. Create users in Keycloak and call the API with a Keycloak bearer token.",
-    )
-
-
-@app.post("/user/login/", summary="Deprecated local login endpoint")
+@app.post("/user/login/", summary="Login via Keycloak")
 async def login_user_via_authentication_service(form_data: OAuth2PasswordRequestForm = Depends()):
-    # Old code:
-    # this endpoint forwarded username/password credentials to authentication-service.
-    #
-    # New code:
-    # callers must authenticate against Keycloak and present the bearer token to
-    # this service. The custom Swagger UI can still receive an SSO token from a
-    # parent portal through postMessage.
-    raise HTTPException(
-        status_code=501,
-        detail="Direct login is no longer supported here. Obtain a Keycloak token and call this API with Authorization: Bearer <token>.",
-    )
+    # Swagger /docs still expects a local password-flow token endpoint.
+    # Proxy that request to Keycloak so the browser does not need direct realm
+    # knowledge and the rest of the API can continue validating bearer tokens
+    # locally with verify_keycloak_token_and_get_current_user().
+    client_id = KEYCLOAK_CLIENT_ID or "contract-service"
+    token_url = _build_keycloak_token_url()
+    form_payload = {
+        "client_id": client_id,
+        "grant_type": form_data.grant_type or "password",
+        "username": form_data.username,
+        "password": form_data.password,
+    }
+    scope = " ".join(form_data.scopes or []).strip()
+    if scope:
+        form_payload["scope"] = scope
+    if KEYCLOAK_CLIENT_SECRET:
+        form_payload["client_secret"] = KEYCLOAK_CLIENT_SECRET
 
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(token_url, data=form_payload)
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> AuthenticatedUser:
-    # Old code:
-    # verify the bearer token by calling authentication-service
-    # `/user/verify-token/`, then trust the returned local user payload.
-    #
-    # New code:
-    # validate the Keycloak JWT directly, then resolve or provision the matching
-    # local Mongo user document. This keeps contract ownership and access checks
-    # stable because `current_user.id` still uses the local Mongo `_id`.
-    claims = _decode_keycloak_token(token)
-    user = await _get_or_create_local_user_from_claims(claims)
-    roles = _collect_keycloak_roles(claims)
+    if response.status_code >= 400:
+        try:
+            payload = response.json()
+        except Exception:
+            payload = {"detail": response.text or "Keycloak login failed"}
 
-    return AuthenticatedUser(
-        id=str(user["_id"]),
-        keycloak_sub=claims.get("sub"),
-        username_email=user.get("username_email") or claims.get("email"),
-        first_name=user.get("first_name") or claims.get("given_name"),
-        last_name=user.get("last_name") or claims.get("family_name"),
-        name=user.get("name") or claims.get("name"),
-        type=user.get("type") or claims.get("type"),
-        organization=user.get("organization"),
-        roles=roles,
-        groups=_collect_keycloak_groups(claims),
-        is_admin=bool(user.get("is_admin") or ("admin" in roles)),
-    )
+        detail = (
+            payload.get("error_description")
+            or payload.get("detail")
+            or payload.get("error")
+            or "Keycloak login failed"
+        )
+        raise HTTPException(status_code=response.status_code, detail=detail)
+
+    return response.json()
 
 
 def _collect_contract_access_user_ids(contract_obj: Dict[str, Any]) -> List[str]:
@@ -629,8 +390,16 @@ def _collect_contract_access_user_ids(contract_obj: Dict[str, Any]) -> List[str]
 def _set_contract_access_metadata(contract_obj: Dict[str, Any], current_user: AuthenticatedUser) -> Dict[str, Any]:
     # New code writes explicit ownership/access fields.
     # Old code saved the contract body directly without any access metadata.
+    # Record the local Mongo user id as the contract owner so later reads,
+    # updates, deletes, and signatures can make authorization decisions using
+    # the same stable internal identity.
     contract_obj["owner_user_id"] = str(current_user.id)
+    # Keep a human-readable owner identifier alongside the internal owner id to
+    # simplify debugging, audit trails, and operational inspection.
     contract_obj["owner_username_email"] = current_user.username_email
+    # Build the allow-list of local user ids that may access this contract.
+    # This combines the authenticated creator with any participant ids already
+    # present in the contract payload.
     contract_obj["authorized_user_ids"] = _collect_contract_access_user_ids(
         {
             **contract_obj,
@@ -638,6 +407,8 @@ def _set_contract_access_metadata(contract_obj: Dict[str, Any], current_user: Au
             "created_by_user_id": str(current_user.id),
         }
     )
+    # Return the same contract payload after injecting the access-control
+    # metadata expected by the rest of the API.
     return contract_obj
 
 
@@ -677,7 +448,7 @@ async def _varify_contract(
 @app.post("/contract/create", summary="Create a contract")
 async def create_contract(
         body: UpcastContractObject = Body(..., description="The contract object"),
-        current_user: AuthenticatedUser = Depends(get_current_user),
+        current_user: AuthenticatedUser = Depends(verify_keycloak_token_and_get_current_user),
 ):
     try:
 
@@ -833,7 +604,7 @@ async def create_contract(
 async def update_contract(
         contract_id: str = Path(..., description="The ID of the Negotiation"),
         body: UpcastContractObject = Body(..., description="The contract object"),
-        current_user: AuthenticatedUser = Depends(get_current_user),
+        current_user: AuthenticatedUser = Depends(verify_keycloak_token_and_get_current_user),
 ):
     try:
 
@@ -886,7 +657,7 @@ async def update_contract(
 )
 async def get_request_body_for_legal_contract(
         contract_id: str = Path(..., description="The ID of the contract"),
-        current_user: AuthenticatedUser = Depends(get_current_user),
+        current_user: AuthenticatedUser = Depends(verify_keycloak_token_and_get_current_user),
 ):
     # Old code loaded the contract directly with ObjectId and did not check auth.
     doc = await _varify_contract(contract_id, current_user)
@@ -912,7 +683,7 @@ async def get_request_body_for_legal_contract(
 )
 async def get_legal_contract(
         contract_id: str = Path(..., description="The ID of the contract"),
-        current_user: AuthenticatedUser = Depends(get_current_user),
+        current_user: AuthenticatedUser = Depends(verify_keycloak_token_and_get_current_user),
 ):
     # Old code fetched the contract directly from Mongo without auth checks.
     doc = await _varify_contract(contract_id, current_user)
@@ -969,7 +740,7 @@ async def get_legal_contract(
 )
 async def get_machine_processable_contract(
         contract_id: str = Path(..., description="The ID of the contract"),
-        current_user: AuthenticatedUser = Depends(get_current_user),
+        current_user: AuthenticatedUser = Depends(verify_keycloak_token_and_get_current_user),
 ):
     try:
         contract_json = await get_legal_contract(contract_id, current_user)
@@ -1008,7 +779,7 @@ async def get_machine_processable_contract(
 async def sign_contract(
         contract_id: str = Path(..., description="The ID of the contract"),
         body: UpcastSignatureObject = Body(..., description="The signature object"),
-        current_user: AuthenticatedUser = Depends(get_current_user),
+        current_user: AuthenticatedUser = Depends(verify_keycloak_token_and_get_current_user),
 ):
     try:
         contract = await _varify_contract(contract_id, current_user)
@@ -1076,7 +847,7 @@ async def get_diffs_bet_two_contracts(
         response: Response,
         first_contract_id: str = Header(..., alias="first-contract-id", description="ID of the first contract"),
         second_contract_id: str = Header(..., alias="second-contract-id", description="ID of the second contract"),
-        current_user: AuthenticatedUser = Depends(get_current_user),
+        current_user: AuthenticatedUser = Depends(verify_keycloak_token_and_get_current_user),
 ):
     # 1) Validate ObjectIds
     try:
@@ -1275,7 +1046,7 @@ def get_diff_for_clauses(req: TextDiffRequest) -> TextDiffResponse:
 )
 async def download_contract(
         contract_id: str = Path(..., description="The ID of the contract"),
-        current_user: AuthenticatedUser = Depends(get_current_user),
+        current_user: AuthenticatedUser = Depends(verify_keycloak_token_and_get_current_user),
 ):
     try:
         # Old code loaded the contract directly from Mongo without auth checks.
@@ -1417,7 +1188,7 @@ async def ensure_indexes():
          summary="Search contracts by metadata/clauses (no pagination)")
 async def search_contract(
         keywords: str = Query(..., description="Search string (metadata, clauses, ODRL, contacts, etc.)"),
-        current_user: AuthenticatedUser = Depends(get_current_user),
+        current_user: AuthenticatedUser = Depends(verify_keycloak_token_and_get_current_user),
 ):
     q = keywords
     await ensure_indexes()
@@ -1475,7 +1246,7 @@ async def get_summary_for_contract(
             le=2000,
             description="Approximate number of WORDS for the summary (not tokens).",
         ),
-        current_user: AuthenticatedUser = Depends(get_current_user),
+        current_user: AuthenticatedUser = Depends(verify_keycloak_token_and_get_current_user),
 ):
     # Old code fetched the contract directly from Mongo without auth checks.
     contract = await _varify_contract(contract_id, current_user)
@@ -1560,7 +1331,7 @@ def find_changes(old: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
             summary="Delete a contract")
 async def delete_contracts_for_negotiation(
         contract_id: str = Path(..., description="The ID of the negotiation"),
-        current_user: AuthenticatedUser = Depends(get_current_user),
+        current_user: AuthenticatedUser = Depends(verify_keycloak_token_and_get_current_user),
 ):
     # 1. Convert and verify the contract exists
     contract = await _varify_contract(contract_id, current_user)
