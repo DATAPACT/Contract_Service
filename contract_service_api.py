@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, AliasChoices
 from pydantic import field_validator
 from pymongo import ASCENDING, TEXT
 
-from auth import AuthenticatedUser, verify_keycloak_token_and_get_current_user
+from keycloak_auth.auth import AuthenticatedUser, verify_keycloak_token_and_get_current_user
 from ca_generation import get_consent_contract_text
 from dsa_generation import get_dsa_contract_text
 from cactus_dsa_generation import get_cactus_dsa_contract_text

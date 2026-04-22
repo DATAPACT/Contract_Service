@@ -7,8 +7,6 @@
     <list default="true" id="82c7e697-05d9-446e-8f3d-aa7feec3c757" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/auth.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/contract_service_api.py" beforeDir="false" afterPath="$PROJECT_DIR$/contract_service_api.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/env_example" beforeDir="false" afterPath="$PROJECT_DIR$/env_example" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -60,7 +58,7 @@
       <window_info id="Commit_Guest" show_stripe_button="false" />
       <window_info id="Pull Requests" />
       <window_info id="Learn" />
-      <window_info content_ui="combo" id="Project" order="0" weight="0.10686499" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.2844998" />
       <window_info id="Commit" order="1" weight="0.25" />
       <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Database Changes" />
@@ -72,7 +70,7 @@
       <window_info anchor="bottom" id="Version Control" order="0" />
       <window_info anchor="bottom" id="Problems" order="1" />
       <window_info anchor="bottom" id="Problems View" order="2" />
-      <window_info anchor="bottom" id="Terminal" order="3" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="3" visible="true" weight="0.8380282" />
       <window_info anchor="bottom" id="Services" order="4" />
       <window_info anchor="bottom" id="Python Packages" order="5" weight="0.1" />
       <window_info anchor="bottom" id="Python Console" order="6" weight="0.1" />
@@ -111,7 +109,7 @@
       <updated>1776257026794</updated>
       <workItem from="1776257027894" duration="1483000" />
       <workItem from="1776418700721" duration="4934000" />
-      <workItem from="1776517972911" duration="18265000" />
+      <workItem from="1776517972911" duration="30139000" />
     </task>
     <servers />
   </component>
