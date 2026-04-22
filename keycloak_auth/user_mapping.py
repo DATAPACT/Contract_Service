@@ -46,6 +46,10 @@ def build_full_name(first_name: Optional[str], last_name: Optional[str]) -> Opti
 
 
 async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: Optional[logging.Logger] = None) -> Dict[str, Any]:
+
+    # `sub` is the stable Keycloak subject identifier and the primary link between the external identity and the local Mongo user document.
+    # keycloak_id
+
     keycloak_sub = claims.get("sub")
     if not keycloak_sub:
         raise HTTPException(status_code=401, detail="Keycloak token missing subject")
@@ -56,11 +60,20 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
     display_name = build_full_name(first_name, last_name) or claims.get("name") or claims.get("preferred_username") or username_email
     roles = claims.get("_keycloak_roles") or []
     groups = claims.get("_keycloak_groups") or []
+
     now = datetime.utcnow()
 
-    user = await users_collection.find_one({"$or": [{"keycloak_sub": keycloak_sub}, {"keycloak_user_id": keycloak_sub}]})
+    # First try the canonical lookup by Keycloak subject. This is the safest
+    # mapping once a local user has already been linked to Keycloak
+
+    user = await users_collection.find_one({"$or": [{"keycloak_sub": keycloak_sub},
+                                                    {"keycloak_user_id": keycloak_sub}]})
 
     if not user and username_email:
+
+        # When migrating existing users to Keycloak, first try to match the
+        # existing user document by email and then bind it to the Keycloak `sub`.
+
         user = await users_collection.find_one({"username_email": username_email})
         if user:
             await users_collection.update_one(
@@ -77,6 +90,9 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
             user = await users_collection.find_one({"_id": user["_id"]})
 
     if not user:
+        # Provision a local placeholder business profile on first Keycloak login
+        # so contract ownership and access control can continue using a local Mongo `_id`.
+
         placeholder_value = "miss value"
         username_email = username_email or f"{keycloak_sub}@missing.local"
         first_name = first_name or placeholder_value
@@ -111,6 +127,9 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
         insert_result = await users_collection.insert_one(new_user)
         user = await users_collection.find_one({"_id": insert_result.inserted_id})
     else:
+        # Keep the local profile synchronized with the latest trusted Keycloak
+        # claims while preserving app-specific fields already stored in Mongo.
+
         update_fields = {
             "updated_at": now,
             "last_login_at": now,

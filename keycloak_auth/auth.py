@@ -68,16 +68,30 @@ def get_jwks_client() -> jwt.PyJWKClient:
 
 
 def collect_keycloak_roles(claims: Dict[str, Any]) -> List[str]:
+    #
+    # Aggregate every role the token exposes into one normalized list.
+    # Keycloak can place roles in two common areas:
+    # 1. `realm_access.roles` for realm-wide roles
+    # 2. `resource_access[client].roles` for client-specific roles
+    # The rest of the application consumes a flat role list, so this helper
+    # merges both sources, removes duplicates, and returns a stable order.
+
+
     roles = set()
+    # Collect realm-level roles such as platform-wide admin or user roles.
     realm_access = claims.get("realm_access") or {}
     for role in realm_access.get("roles") or []:
         if role:
             roles.add(str(role))
+
+    # Collect client-level roles from every resource entry present in the token.
     resource_access = claims.get("resource_access") or {}
     for client_access in resource_access.values():
         for role in (client_access or {}).get("roles") or []:
             if role:
                 roles.add(str(role))
+
+    # Return a sorted list so downstream comparisons and logs are deterministic.
     return sorted(roles)
 
 
@@ -89,6 +103,8 @@ def collect_keycloak_groups(claims: Dict[str, Any]) -> List[str]:
 
 
 async def verify_access(request: Request, authorization: Optional[str] = Header(None)) -> None:
+
+
     unauthenticated_paths = {"/docs", "/openapi.json", "/user/login/", "/user/register"}
     if request.url.path in unauthenticated_paths:
         return
@@ -113,24 +129,46 @@ async def verify_access(request: Request, authorization: Optional[str] = Header(
 
 
 def decode_keycloak_token(token: str) -> Dict[str, Any]:
+
+    # Build the standard 401 response used when the bearer token is missing,
+    # malformed, expired, signed by the wrong key, or otherwise invalid.
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # The issuer identifies the Keycloak realm that is allowed to mint tokens
+    # for this service. Without it we cannot safely verify the JWT.
+
     if not KEYCLOAK_ISSUER:
         raise HTTPException(status_code=500, detail="KEYCLOAK_ISSUER environment variable not set")
     try:
+        # Resolve the signing key from Keycloak JWKS using the JWT header `kid`.
+        # This lets the service verify tokens locally without calling Keycloak for every request.
+
         signing_key = get_jwks_client().get_signing_key_from_jwt(token)
+
+        # Prepare JWT verification settings:
+        # - `key` is the resolved public key
+        # - `algorithms` restricts accepted signing algorithms
+        # - `issuer` ensures the token comes from the configured realm
+        # - `verify_aud` is enabled only when an audience/client is configured
+
         decode_kwargs = {
             "key": signing_key.key,
             "algorithms": KEYCLOAK_ALGORITHMS,
             "issuer": KEYCLOAK_ISSUER,
             "options": {"verify_aud": bool(KEYCLOAK_AUDIENCE or KEYCLOAK_CLIENT_ID)},
         }
+
+        # When configured, require the token audience to match this API's expected Keycloak client identifier.
         expected_audience = KEYCLOAK_AUDIENCE or KEYCLOAK_CLIENT_ID
         if expected_audience:
             decode_kwargs["audience"] = expected_audience
+
+        # Decode the JWT and return its claims as a Python dictionary.
         claims = jwt.decode(token, **decode_kwargs)
         claims["_keycloak_roles"] = collect_keycloak_roles(claims)
         claims["_keycloak_groups"] = collect_keycloak_groups(claims)
@@ -143,10 +181,17 @@ def decode_keycloak_token(token: str) -> Dict[str, Any]:
 
 
 async def verify_keycloak_token_and_get_current_user(token: str = Depends(oauth2_scheme)) -> AuthenticatedUser:
+
+    # Verify the incoming Keycloak JWT and decode it into token claims.
     claims = decode_keycloak_token(token)
+
+    # Resolve the matching local Mongo user, creating a placeholder record if needed.
     user = await resolve_or_create_local_user_from_claims(claims, logger)
+
+    # Extract Keycloak roles from the decoded claims for authorization decisions.
     roles = claims.get("_keycloak_roles") or collect_keycloak_roles(claims)
     groups = claims.get("_keycloak_groups") or collect_keycloak_groups(claims)
+
     return AuthenticatedUser(
         id=str(user["_id"]),
         keycloak_sub=claims.get("sub"),

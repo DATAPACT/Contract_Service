@@ -45,13 +45,6 @@ app = FastAPI(
     openapi_url="/openapi.json",
     docs_url=None,  # replaced by custom /docs with SSO postMessage support
     version="1.0",
-    # Old code:
-    # dependencies=[Depends(verify_access)],
-    #
-    # New code:
-    # do not apply the new Keycloak-specific global dependency here.
-    # This service already authenticates protected routes with verify_keycloak_token_and_get_current_user(),
-    # and those routes validate the same JWT issued by authentication-service.
 )
 
 origins = [
@@ -301,30 +294,15 @@ class AuthenticationRegisterUser(BaseModel):
     position_title: Optional[str] = None
     phone: Optional[str] = None
 
-# @app.post("/user/register", summary="Deprecated local register endpoint")
-# async def register_user_via_authentication_service(
-#         user: AuthenticationRegisterUser,
-#         master_password_input: str,
-# ):
-#     # Old code:
-#     # this endpoint proxied user registration to authentication-service.
-#     #
-#     # New code:
-#     # contract-service no longer owns registration in the Keycloak architecture.
-#     # User creation must happen in Keycloak, and local Mongo user data is
-#     # provisioned automatically when the authenticated caller uses the API.
-#     raise HTTPException(
-#         status_code=501,
-#         detail="Direct registration is no longer supported here. Create users in Keycloak and call the API with a Keycloak bearer token.",
-#     )
-
 
 @app.post("/user/login/", summary="Login via Keycloak")
 async def login_user_via_authentication_service(form_data: OAuth2PasswordRequestForm = Depends()):
+
     # Swagger /docs still expects a local password-flow token endpoint.
     # Proxy that request to Keycloak so the browser does not need direct realm
     # knowledge and the rest of the API can continue validating bearer tokens
     # locally with verify_keycloak_token_and_get_current_user().
+
     client_id = KEYCLOAK_CLIENT_ID or "contract-service"
     token_url = _build_keycloak_token_url()
     form_payload = {
@@ -388,6 +366,7 @@ def _collect_contract_access_user_ids(contract_obj: Dict[str, Any]) -> List[str]
 
 
 def _set_contract_access_metadata(contract_obj: Dict[str, Any], current_user: AuthenticatedUser) -> Dict[str, Any]:
+
     # New code writes explicit ownership/access fields.
     # Old code saved the contract body directly without any access metadata.
     # Record the local Mongo user id as the contract owner so later reads,
@@ -423,12 +402,8 @@ async def _varify_contract(
         contract_id: str,
         current_user: Optional[AuthenticatedUser] = None,
 ):
-    # Old code:
-    # async def _varify_contract(contract_id: str):
-    #     contract = await contracts_collection.find_one({"_id": cid})
-    #
-    # New code also checks whether the authenticated caller is allowed to use
-    # this contract after loading it.
+    # checks whether the authenticated caller is allowed to use this contract after loading it.
+
     try:
         cid = ObjectId(contract_id)
     except Exception:
@@ -455,9 +430,9 @@ async def create_contract(
         print("function of /contract/create: contract API body: \n", body.dict())
 
         contract_obj = pydantic_to_dict(body, clean_id=True)
-        # New code adds access metadata derived from the authenticated caller
-        # and the contract participants in the payload.
-        # Old code inserted contract_obj directly without ownership data.
+
+        # New code adds access metadata derived from the authenticated caller and the contract participants in the payload.
+
         contract_obj = _set_contract_access_metadata(contract_obj, current_user)
 
         contract_type = contract_obj.get("contract_type")
