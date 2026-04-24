@@ -284,6 +284,7 @@ class AuthenticationRegisterUser(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     name: Optional[str] = None
+    username: Optional[str] = None
     type: Optional[str] = None
     username_email: Optional[str] = None
     password: Optional[str] = None
@@ -298,10 +299,7 @@ class AuthenticationRegisterUser(BaseModel):
 @app.post("/user/login/", summary="Login via Keycloak")
 async def login_user_via_authentication_service(form_data: OAuth2PasswordRequestForm = Depends()):
 
-    # Swagger /docs still expects a local password-flow token endpoint.
-    # Proxy that request to Keycloak so the browser does not need direct realm
-    # knowledge and the rest of the API can continue validating bearer tokens
-    # locally with verify_keycloak_token_and_get_current_user().
+    # call ../protocol/openid-connect/token" request an access token
 
     client_id = KEYCLOAK_CLIENT_ID or "contract-service"
     token_url = _build_keycloak_token_url()

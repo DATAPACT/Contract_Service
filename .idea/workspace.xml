@@ -4,7 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="82c7e697-05d9-446e-8f3d-aa7feec3c757" name="Changes" comment="" />
+    <list default="true" id="82c7e697-05d9-446e-8f3d-aa7feec3c757" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/contract_service_api.py" beforeDir="false" afterPath="$PROJECT_DIR$/contract_service_api.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/keycloak_auth/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/keycloak_auth/auth.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/keycloak_auth/user_mapping.py" beforeDir="false" afterPath="$PROJECT_DIR$/keycloak_auth/user_mapping.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -37,7 +42,7 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "last_opened_file_path": "/home/mh1f25/scratch/datapack_pro/datapack-local-dev/Contract_Service/demo",
+    "last_opened_file_path": "/home/mh1f25/scratch/datapack_pro/datapack-local-dev/user_management",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -56,7 +61,7 @@
       <window_info id="Commit_Guest" show_stripe_button="false" />
       <window_info id="Pull Requests" />
       <window_info id="Learn" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.13190104" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.16809896" />
       <window_info id="Commit" order="1" weight="0.25" />
       <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Database Changes" />
@@ -68,7 +73,7 @@
       <window_info anchor="bottom" id="Version Control" order="0" />
       <window_info anchor="bottom" id="Problems" order="1" />
       <window_info anchor="bottom" id="Problems View" order="2" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="3" visible="true" weight="0.63112116" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="3" visible="true" weight="0.07119845" />
       <window_info anchor="bottom" id="Services" order="4" />
       <window_info anchor="bottom" id="Python Packages" order="5" weight="0.1" />
       <window_info anchor="bottom" id="Python Console" order="6" weight="0.1" />
@@ -109,6 +114,7 @@
       <workItem from="1776418700721" duration="4934000" />
       <workItem from="1776517972911" duration="30139000" />
       <workItem from="1776800339648" duration="8496000" />
+      <workItem from="1776938716778" duration="14895000" />
     </task>
     <servers />
   </component>

@@ -13,7 +13,7 @@ USER_MONGO_USER = os.getenv("USER_MONGO_USER")
 USER_MONGO_PASSWORD = os.getenv("USER_MONGO_PASSWORD")
 USER_MONGO_HOST = os.getenv("USER_MONGO_HOST")
 USER_MONGO_PORT = os.getenv("USER_MONGO_PORT")
-USER_MONGO_DB = os.getenv("USER_MONGO_DB", "upcast")
+USER_MONGO_DB = os.getenv("USER_MONGO_DB", "datapack")
 
 MONGO_USER = os.getenv("MONGO_USER")
 MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
@@ -57,7 +57,8 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
     username_email = claims.get("email") or claims.get("preferred_username")
     first_name = (claims.get("given_name") or "").strip() or None
     last_name = (claims.get("family_name") or "").strip() or None
-    display_name = build_full_name(first_name, last_name) or claims.get("name") or claims.get("preferred_username") or username_email
+    display_name = build_full_name(first_name, last_name)
+    username = (claims.get("preferred_username") or "").strip() or None
     roles = claims.get("_keycloak_roles") or []
     groups = claims.get("_keycloak_groups") or []
 
@@ -83,6 +84,7 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
                     "first_name": first_name,
                     "last_name": last_name,
                     "name": display_name,
+                    "username": username,
                     "updated_at": now,
                     "last_login_at": now,
                 }},
@@ -104,6 +106,7 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
             "first_name": first_name,
             "last_name": last_name,
             "name": display_name,
+            "username": username,
             "type": placeholder_type,
             "username_email": username_email,
             "password": None,
@@ -142,6 +145,8 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
             update_fields["last_name"] = last_name
         if display_name and user.get("name") != display_name:
             update_fields["name"] = display_name
+        if username and user.get("username") != username:
+            update_fields["username"] = username
         if roles:
             update_fields["roles"] = roles
         if groups:

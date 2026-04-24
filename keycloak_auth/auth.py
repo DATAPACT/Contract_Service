@@ -31,6 +31,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login/")
 class AuthenticatedUser(BaseModel):
     id: str
     keycloak_sub: Optional[str] = None
+    username: Optional[str] = None
     username_email: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -195,6 +196,7 @@ async def verify_keycloak_token_and_get_current_user(token: str = Depends(oauth2
     return AuthenticatedUser(
         id=str(user["_id"]),
         keycloak_sub=claims.get("sub"),
+        username=user.get("username") or claims.get("preferred_username"),
         username_email=user.get("username_email") or claims.get("email"),
         first_name=user.get("first_name") or claims.get("given_name"),
         last_name=user.get("last_name") or claims.get("family_name"),
