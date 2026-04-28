@@ -185,6 +185,22 @@ async def verify_keycloak_token_and_get_current_user(token: str = Depends(oauth2
 
     # Verify the incoming Keycloak JWT and decode it into token claims.
     claims = decode_keycloak_token(token)
+    response = await _http_client.get(
+        f"{KEYCLOAK_ISSUER}/protocol/openid-connect/userinfo",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    if response.status_code != 200:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid or expired Keycloak token")
+    userinfo = response.json()
+    if isinstance(userinfo, dict):
+        attributes = dict((claims.get("attributes") or {}))
+        for key, value in userinfo.items():
+            if key == "attributes" and isinstance(value, dict):
+                attributes.update(value)
+            elif value is not None:
+                claims[key] = value
+        if attributes:
+            claims["attributes"] = attributes
 
     # Resolve the matching local Mongo user, creating a placeholder record if needed.
     user = await resolve_or_create_local_user_from_claims(claims, logger)
@@ -201,7 +217,7 @@ async def verify_keycloak_token_and_get_current_user(token: str = Depends(oauth2
         first_name=user.get("first_name") or claims.get("given_name"),
         last_name=user.get("last_name") or claims.get("family_name"),
         name=user.get("name") or claims.get("name"),
-        type=user.get("type") or claims.get("type"),
+        type=user.get("type") or claims.get("user_type") or claims.get("type"),
         organization=user.get("organization"),
         incorporation=user.get("incorporation"),
         address=user.get("address"),

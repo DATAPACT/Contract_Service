@@ -13,7 +13,7 @@ USER_MONGO_USER = os.getenv("USER_MONGO_USER")
 USER_MONGO_PASSWORD = os.getenv("USER_MONGO_PASSWORD")
 USER_MONGO_HOST = os.getenv("USER_MONGO_HOST")
 USER_MONGO_PORT = os.getenv("USER_MONGO_PORT")
-USER_MONGO_DB = os.getenv("USER_MONGO_DB", "datapack")
+USER_MONGO_DB = os.getenv("USER_MONGO_DB", "dips_services")
 
 MONGO_USER = os.getenv("MONGO_USER")
 MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
@@ -45,6 +45,39 @@ def build_full_name(first_name: Optional[str], last_name: Optional[str]) -> Opti
     return " ".join(parts) or None
 
 
+def _claim_attribute_value(claims: Dict[str, Any], *keys: str) -> Optional[Any]:
+    attributes = claims.get("attributes") or {}
+    value = None
+    for key in keys:
+        value = claims.get(key)
+        if value is None:
+            value = attributes.get(key)
+        if value is not None:
+            break
+    if isinstance(value, list):
+        if len(value) == 1:
+            return value[0]
+        return value
+    return value
+
+
+def _clean_optional_string(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value or None
+
+
+def _normalize_organization_claim(value: Any) -> Optional[Any]:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        cleaned = [str(item).strip() for item in value if str(item).strip()]
+        return cleaned or None
+    cleaned = str(value).strip()
+    return [cleaned] if cleaned else None
+
+
 async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: Optional[logging.Logger] = None) -> Dict[str, Any]:
 
     # `sub` is the stable Keycloak subject identifier and the primary link between the external identity and the local Mongo user document.
@@ -59,6 +92,13 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
     last_name = (claims.get("family_name") or "").strip() or None
     display_name = build_full_name(first_name, last_name)
     username = (claims.get("preferred_username") or "").strip() or None
+    user_type = _clean_optional_string(_claim_attribute_value(claims, "user_type", "type"))
+    organization = _normalize_organization_claim(_claim_attribute_value(claims, "organization"))
+    incorporation = _clean_optional_string(_claim_attribute_value(claims, "incorporation"))
+    address = _clean_optional_string(_claim_attribute_value(claims, "address"))
+    vat_no = _clean_optional_string(_claim_attribute_value(claims, "VAT_No"))
+    position_title = _clean_optional_string(_claim_attribute_value(claims, "positionTitle", "PositionTitle"))
+    phone = _clean_optional_string(_claim_attribute_value(claims, "phone"))
     roles = claims.get("_keycloak_roles") or []
     groups = claims.get("_keycloak_groups") or []
 
@@ -77,17 +117,36 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
 
         user = await users_collection.find_one({"username_email": username_email})
         if user:
+            bind_fields = {
+                "keycloak_sub": keycloak_sub,
+                "updated_at": now,
+                "last_login_at": now,
+            }
+            if first_name:
+                bind_fields["first_name"] = first_name
+            if last_name:
+                bind_fields["last_name"] = last_name
+            if display_name:
+                bind_fields["name"] = display_name
+            if username:
+                bind_fields["username"] = username
+            if user_type:
+                bind_fields["type"] = user_type
+            if organization:
+                bind_fields["organization"] = organization
+            if incorporation:
+                bind_fields["incorporation"] = incorporation
+            if address:
+                bind_fields["address"] = address
+            if vat_no:
+                bind_fields["vat_no"] = vat_no
+            if position_title:
+                bind_fields["position_title"] = position_title
+            if phone:
+                bind_fields["phone"] = phone
             await users_collection.update_one(
                 {"_id": user["_id"]},
-                {"$set": {
-                    "keycloak_sub": keycloak_sub,
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "name": display_name,
-                    "username": username,
-                    "updated_at": now,
-                    "last_login_at": now,
-                }},
+                {"$set": bind_fields},
             )
             user = await users_collection.find_one({"_id": user["_id"]})
 
@@ -100,7 +159,7 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
         first_name = first_name or placeholder_value
         last_name = last_name or placeholder_value
         display_name = build_full_name(first_name, last_name) or placeholder_value
-        placeholder_type = claims.get("type") or placeholder_value
+        placeholder_type = user_type or placeholder_value
         new_user = {
             "keycloak_sub": keycloak_sub,
             "first_name": first_name,
@@ -110,12 +169,12 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
             "type": placeholder_type,
             "username_email": username_email,
             "password": None,
-            "organization": [placeholder_value],
-            "incorporation": placeholder_value,
-            "address": placeholder_value,
-            "vat_no": placeholder_value,
-            "position_title": placeholder_value,
-            "phone": placeholder_value,
+            "organization": organization or [placeholder_value],
+            "incorporation": incorporation or placeholder_value,
+            "address": address or placeholder_value,
+            "vat_no": vat_no or placeholder_value,
+            "position_title": position_title or placeholder_value,
+            "phone": phone or placeholder_value,
             "roles": roles,
             "groups": groups,
             "created_at": now,
@@ -147,6 +206,20 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
             update_fields["name"] = display_name
         if username and user.get("username") != username:
             update_fields["username"] = username
+        if user_type and user.get("type") != user_type:
+            update_fields["type"] = user_type
+        if organization and user.get("organization") != organization:
+            update_fields["organization"] = organization
+        if incorporation and user.get("incorporation") != incorporation:
+            update_fields["incorporation"] = incorporation
+        if address and user.get("address") != address:
+            update_fields["address"] = address
+        if vat_no and user.get("vat_no") != vat_no:
+            update_fields["vat_no"] = vat_no
+        if position_title and user.get("position_title") != position_title:
+            update_fields["position_title"] = position_title
+        if phone and user.get("phone") != phone:
+            update_fields["phone"] = phone
         if roles:
             update_fields["roles"] = roles
         if groups:

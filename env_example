@@ -18,7 +18,7 @@ KEYCLOAK_CLIENT_ID=contract-service
 KEYCLOAK_CLIENT_SECRET=your_keycloak_client_secret
 
 # Both contracts and users are stored in the same MongoDB.
-MONGO_DB=datapack
+MONGO_DB=dips_services
 
 API_CONTRACT_SERVICE_URL=http://your_machine_ip:8006
 

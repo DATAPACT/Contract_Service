@@ -250,7 +250,7 @@ MONGO_USER = os.getenv("MONGO_USER")
 MONGO_PASSWORD = os.getenv("MONGO_PASSWORD")
 MONGO_HOST = os.getenv("MONGO_HOST", "localhost")
 MONGO_PORT = os.getenv("MONGO_PORT")
-MONGO_DB = os.getenv("MONGO_DB", "datapack")
+MONGO_DB = os.getenv("MONGO_DB", "dips_services")
 
 KEYCLOAK_CLIENT_SECRET = (os.getenv("KEYCLOAK_CLIENT_SECRET") or "").strip()
 KEYCLOAK_CLIENT_ID = (os.getenv("KEYCLOAK_CLIENT_ID") or "").strip()
@@ -309,9 +309,11 @@ async def login_user_via_authentication_service(form_data: OAuth2PasswordRequest
         "username": form_data.username,
         "password": form_data.password,
     }
-    scope = " ".join(form_data.scopes or []).strip()
-    if scope:
-        form_payload["scope"] = scope
+    requested_scopes = [scope for scope in (form_data.scopes or []) if scope]
+    for required_scope in ("openid", "profile", "email"):
+        if required_scope not in requested_scopes:
+            requested_scopes.append(required_scope)
+    form_payload["scope"] = " ".join(requested_scopes)
     if KEYCLOAK_CLIENT_SECRET:
         form_payload["client_secret"] = KEYCLOAK_CLIENT_SECRET
 
