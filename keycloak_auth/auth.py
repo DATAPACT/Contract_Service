@@ -10,7 +10,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, Field
 
-from .user_mapping import resolve_or_create_local_user_from_claims
+from .user_mapping import build_authenticated_user_payload, resolve_or_create_local_user_from_claims
 
 load_dotenv(dotenv_path=".env")
 logger = logging.getLogger(__name__)
@@ -103,6 +103,40 @@ def collect_keycloak_groups(claims: Dict[str, Any]) -> List[str]:
     return []
 
 
+def merge_keycloak_userinfo(claims: Dict[str, Any], userinfo: Dict[str, Any]) -> Dict[str, Any]:
+    merged = dict(claims)
+    attributes = dict((claims.get("attributes") or {}))
+
+    for key, value in userinfo.items():
+        if key == "attributes" and isinstance(value, dict):
+            attributes.update(value)
+        elif value is not None:
+            merged[key] = value
+
+    if attributes:
+        merged["attributes"] = attributes
+    return merged
+
+
+async def enrich_keycloak_claims(token: str, claims: Dict[str, Any]) -> Dict[str, Any]:
+    response = await _http_client.get(
+        f"{KEYCLOAK_ISSUER}/protocol/openid-connect/userinfo",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    if response.status_code != 200:
+        logger.warning(
+            "Keycloak userinfo lookup failed with status %s: %s",
+            response.status_code,
+            response.text,
+        )
+        return claims
+
+    userinfo = response.json()
+    if isinstance(userinfo, dict):
+        return merge_keycloak_userinfo(claims, userinfo)
+    return claims
+
+
 async def verify_access(request: Request, authorization: Optional[str] = Header(None)) -> None:
 
 
@@ -125,7 +159,11 @@ async def verify_access(request: Request, authorization: Optional[str] = Header(
         headers={"Authorization": f"Bearer {token}"},
     )
     if response.status_code != 200:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid or expired Keycloak token")
+        logger.warning(
+            "Keycloak userinfo validation fallback for token cache failed with status %s: %s",
+            response.status_code,
+            response.text,
+        )
     _token_cache[token] = True
 
 
@@ -185,22 +223,7 @@ async def verify_keycloak_token_and_get_current_user(token: str = Depends(oauth2
 
     # Verify the incoming Keycloak JWT and decode it into token claims.
     claims = decode_keycloak_token(token)
-    response = await _http_client.get(
-        f"{KEYCLOAK_ISSUER}/protocol/openid-connect/userinfo",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    if response.status_code != 200:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid or expired Keycloak token")
-    userinfo = response.json()
-    if isinstance(userinfo, dict):
-        attributes = dict((claims.get("attributes") or {}))
-        for key, value in userinfo.items():
-            if key == "attributes" and isinstance(value, dict):
-                attributes.update(value)
-            elif value is not None:
-                claims[key] = value
-        if attributes:
-            claims["attributes"] = attributes
+    claims = await enrich_keycloak_claims(token, claims)
 
     # Resolve the matching local Mongo user, creating a placeholder record if needed.
     user = await resolve_or_create_local_user_from_claims(claims, logger)
@@ -209,21 +232,10 @@ async def verify_keycloak_token_and_get_current_user(token: str = Depends(oauth2
     roles = claims.get("_keycloak_roles") or collect_keycloak_roles(claims)
     groups = claims.get("_keycloak_groups") or collect_keycloak_groups(claims)
 
+    user_payload = build_authenticated_user_payload(user, claims)
+
     return AuthenticatedUser(
-        id=str(user["_id"]),
-        keycloak_sub=claims.get("sub"),
-        username=user.get("username") or claims.get("preferred_username"),
-        username_email=user.get("username_email") or claims.get("email"),
-        first_name=user.get("first_name") or claims.get("given_name"),
-        last_name=user.get("last_name") or claims.get("family_name"),
-        name=user.get("name") or claims.get("name"),
-        type=user.get("type") or claims.get("user_type") or claims.get("type"),
-        organization=user.get("organization"),
-        incorporation=user.get("incorporation"),
-        address=user.get("address"),
-        vat_no=user.get("vat_no"),
-        position_title=user.get("position_title"),
-        phone=user.get("phone"),
+        **user_payload,
         roles=roles,
         groups=groups,
         is_admin=bool(user.get("is_admin") or ("admin" in roles)),

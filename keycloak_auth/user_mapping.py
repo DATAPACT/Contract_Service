@@ -93,7 +93,7 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
     display_name = build_full_name(first_name, last_name)
     username = (claims.get("preferred_username") or "").strip() or None
     user_type = _clean_optional_string(_claim_attribute_value(claims, "user_type", "type"))
-    organization = _normalize_organization_claim(_claim_attribute_value(claims, "organization"))
+    organization = _normalize_organization_claim(_claim_attribute_value(claims, "organization", "Organization"))
     incorporation = _clean_optional_string(_claim_attribute_value(claims, "incorporation"))
     address = _clean_optional_string(_claim_attribute_value(claims, "address"))
     vat_no = _clean_optional_string(_claim_attribute_value(claims, "VAT_No"))
@@ -231,3 +231,22 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
             user = await users_collection.find_one({"_id": user["_id"]})
 
     return user
+
+
+def build_authenticated_user_payload(user: Dict[str, Any], claims: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": str(user["_id"]),
+        "keycloak_sub": claims.get("sub"),
+        "username": user.get("username") or claims.get("preferred_username"),
+        "username_email": user.get("username_email") or claims.get("email"),
+        "first_name": user.get("first_name") or claims.get("given_name"),
+        "last_name": user.get("last_name") or claims.get("family_name"),
+        "name": user.get("name") or claims.get("name"),
+        "type": user.get("type") or claims.get("user_type") or claims.get("type"),
+        "organization": user.get("organization"),
+        "incorporation": user.get("incorporation"),
+        "address": user.get("address"),
+        "vat_no": user.get("vat_no"),
+        "position_title": user.get("position_title"),
+        "phone": user.get("phone"),
+    }
