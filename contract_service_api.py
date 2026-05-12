@@ -41,7 +41,7 @@ load_dotenv(dotenv_path=".env")
 
 app = FastAPI(
     title="Contract Service API",
-    description="DATAPACK Contract Service API",
+    description="DATAPACT Contract Service API",
     openapi_url="/openapi.json",
     docs_url=None,  # replaced by custom /docs with SSO postMessage support
     version="1.0",
