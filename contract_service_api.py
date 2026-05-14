@@ -1316,8 +1316,12 @@ async def delete_contracts_for_negotiation(
     return {"detail": f"Contract {contract_id} deleted successfully"}
 
 
+def test_function():
+    pass
+
 if __name__ == "__main__":
     import uvicorn
+
 
     # changed the 127.0.0.1 with "0.0.0.0"
     uvicorn.run(app, host="0.0.0.0", port=8866)
