@@ -33,26 +33,6 @@ odrldpv_path = os.path.join(
     BASE_DIR, ".", "odrl_vocabulary_des", "ODRL_DPV.rdf")
 
 
-# json_path_odrl_des = os.path.join(
-#     BASE_DIR, ".", "odrl_vocabulary_des", "ODRL22_keyword_des.json"
-# )
-# json_path_oder_des = os.path.normpath(json_path_odrl_des)
-#
-# json_path_dpv_des = os.path.join(
-#     BASE_DIR, ".", "odrl_vocabulary_des", "dpv_keyword_des.json"
-# )
-# json_path_dpv_des = os.path.normpath(json_path_dpv_des)
-#
-# # Reload keyword description files
-# with open(json_path_oder_des, "r", encoding="utf-8") as f:
-#     odrl_keywords = json.load(f)
-#
-# with open(json_path_dpv_des, "r", encoding="utf-8") as f:
-#     dpv_keywords = json.load(f)
-
-# Merge the two into a single lookup dictionary
-# keyword_lookup = {**odrl_keywords, **dpv_keywords}
-
 
 def _prefer_lang(literals, langs=("en", None)):
     # return the first literal matching preferred languages
