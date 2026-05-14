@@ -300,7 +300,6 @@ class AuthenticationRegisterUser(BaseModel):
 async def login_user_via_authentication_service(form_data: OAuth2PasswordRequestForm = Depends()):
 
     # call ../protocol/openid-connect/token" request an access token
-
     client_id = KEYCLOAK_CLIENT_ID or "contract-service"
     token_url = _build_keycloak_token_url()
     form_payload = {
@@ -367,11 +366,6 @@ def _collect_contract_access_user_ids(contract_obj: Dict[str, Any]) -> List[str]
 
 def _set_contract_access_metadata(contract_obj: Dict[str, Any], current_user: AuthenticatedUser) -> Dict[str, Any]:
 
-    # New code writes explicit ownership/access fields.
-    # Old code saved the contract body directly without any access metadata.
-    # Record the local Mongo user id as the contract owner so later reads,
-    # updates, deletes, and signatures can make authorization decisions using
-    # the same stable internal identity.
     contract_obj["owner_user_id"] = str(current_user.id)
     # Keep a human-readable owner identifier alongside the internal owner id to
     # simplify debugging, audit trails, and operational inspection.

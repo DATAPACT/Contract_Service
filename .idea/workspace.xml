@@ -5,7 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="82c7e697-05d9-446e-8f3d-aa7feec3c757" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/contract_service_api.py" beforeDir="false" afterPath="$PROJECT_DIR$/contract_service_api.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -24,6 +25,11 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="datapact-main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="ProjectColorInfo">{
@@ -39,7 +45,7 @@
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/mh1f25/scratch/datapack_pro/datapack-local-dev/user_management&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/mh1f25/scratch/datapack_pro/datapack-local-dev/Contract_Service/demo&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -58,7 +64,7 @@
       <window_info id="Commit_Guest" show_stripe_button="false" />
       <window_info id="Pull Requests" />
       <window_info id="Learn" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.11014061" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.1798177" />
       <window_info id="Commit" order="1" weight="0.25" />
       <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Database Changes" />
@@ -70,7 +76,7 @@
       <window_info anchor="bottom" id="Version Control" order="0" />
       <window_info anchor="bottom" id="Problems" order="1" />
       <window_info anchor="bottom" id="Problems View" order="2" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="3" visible="true" weight="0.37860578" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="3" visible="true" weight="0.14787371" />
       <window_info anchor="bottom" id="Services" order="4" />
       <window_info anchor="bottom" id="Python Packages" order="5" weight="0.1" />
       <window_info anchor="bottom" id="Python Console" order="6" weight="0.1" />
@@ -110,14 +116,7 @@
       <workItem from="1776257027894" duration="1483000" />
       <workItem from="1776418700721" duration="4934000" />
       <workItem from="1776517972911" duration="30139000" />
-      <workItem from="1776800339648" duration="8496000" />
-      <workItem from="1776938716778" duration="14895000" />
-      <workItem from="1777042734798" duration="1308000" />
-      <workItem from="1777380474495" duration="2757000" />
-      <workItem from="1777645244303" duration="61000" />
-      <workItem from="1777648210995" duration="1271000" />
-      <workItem from="1777650550920" duration="43000" />
-      <workItem from="1778242007648" duration="1116000" />
+      <workItem from="1776800339648" duration="8442000" />
     </task>
     <servers />
   </component>

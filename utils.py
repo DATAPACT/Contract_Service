@@ -254,8 +254,6 @@ def refinements_odrl_des(content):
 
     return out_obj
 
-
-# ---------------- Font registration (Arial if available, else Helvetica) ----------------
 def _register_arial_family():
     """
     Try to register Arial TTFs if the system has them.
