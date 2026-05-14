@@ -4,4 +4,6 @@ download_contract/
 /demo
 demo/
 .idea/
+.gitignore
+.idea/workspace.xml
 .idea/
