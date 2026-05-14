@@ -1,0 +1,59 @@
+name: Sync Contract-Service to DATAPACT repository
+
+on:
+  push:
+    branches:
+      - datapact-main
+
+concurrency:
+  group: sync-contract-service-to-datapact-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'DIPS-Tools/Contract-Service'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+
+      - name: Verify token exists
+        env:
+          TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "SYNC_TOKEN is missing"
+            exit 1
+          fi
+
+      - name: Configure git auth
+        env:
+          TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git config --unset-all http.https://github.com/.extraheader || true
+
+          git remote remove target || true
+          git remote add target \
+            https://x-access-token:${TOKEN}@github.com/DATAPACT/Contract_Service.git
+
+      - name: Verify access to target repo
+        env:
+          TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          git ls-remote https://x-access-token:${TOKEN}@github.com/DATAPACT/Contract_Service.git
+
+      - name: Sync datapact-main branch to DATAPACT main
+        run: |
+          set -euo pipefail
+
+          git fetch target main
+
+          git push target HEAD:main --force
