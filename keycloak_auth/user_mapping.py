@@ -94,6 +94,7 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
     username = (claims.get("preferred_username") or "").strip() or None
     user_type = _clean_optional_string(_claim_attribute_value(claims, "user_type", "type"))
     organization = _normalize_organization_claim(_claim_attribute_value(claims, "organization", "Organization"))
+
     incorporation = _clean_optional_string(_claim_attribute_value(claims, "incorporation"))
     address = _clean_optional_string(_claim_attribute_value(claims, "address"))
     vat_no = _clean_optional_string(_claim_attribute_value(claims, "VAT_No"))

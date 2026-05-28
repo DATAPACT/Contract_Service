@@ -103,40 +103,6 @@ def collect_keycloak_groups(claims: Dict[str, Any]) -> List[str]:
     return []
 
 
-def merge_keycloak_userinfo(claims: Dict[str, Any], userinfo: Dict[str, Any]) -> Dict[str, Any]:
-    merged = dict(claims)
-    attributes = dict((claims.get("attributes") or {}))
-
-    for key, value in userinfo.items():
-        if key == "attributes" and isinstance(value, dict):
-            attributes.update(value)
-        elif value is not None:
-            merged[key] = value
-
-    if attributes:
-        merged["attributes"] = attributes
-    return merged
-
-
-async def enrich_keycloak_claims(token: str, claims: Dict[str, Any]) -> Dict[str, Any]:
-    response = await _http_client.get(
-        f"{KEYCLOAK_ISSUER}/protocol/openid-connect/userinfo",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    if response.status_code != 200:
-        logger.warning(
-            "Keycloak userinfo lookup failed with status %s: %s",
-            response.status_code,
-            response.text,
-        )
-        return claims
-
-    userinfo = response.json()
-    if isinstance(userinfo, dict):
-        return merge_keycloak_userinfo(claims, userinfo)
-    return claims
-
-
 async def verify_access(request: Request, authorization: Optional[str] = Header(None)) -> None:
 
 
@@ -223,7 +189,6 @@ async def verify_keycloak_token_and_get_current_user(token: str = Depends(oauth2
 
     # Verify the incoming Keycloak JWT and decode it into token claims.
     claims = decode_keycloak_token(token)
-    claims = await enrich_keycloak_claims(token, claims)
 
     # Resolve the matching local Mongo user, creating a placeholder record if needed.
     user = await resolve_or_create_local_user_from_claims(claims, logger)

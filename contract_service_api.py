@@ -41,7 +41,7 @@ load_dotenv(dotenv_path=".env")
 
 app = FastAPI(
     title="Contract Service API",
-    description="DATAPACT Contract Service API",
+    description="DIPS Contract Service API",
     openapi_url="/openapi.json",
     docs_url=None,  # replaced by custom /docs with SSO postMessage support
     version="1.0",
@@ -332,7 +332,7 @@ async def login_user_via_authentication_service(form_data: OAuth2PasswordRequest
             or "Keycloak login failed"
         )
         raise HTTPException(status_code=response.status_code, detail=detail)
-
+    print("response.json():", response.json())
     return response.json()
 
 
