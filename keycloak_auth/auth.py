@@ -53,18 +53,18 @@ _token_cache: TTLCache = TTLCache(maxsize=500, ttl=60)
 _http_client = httpx.AsyncClient(timeout=5.0)
 
 
-def _build_keycloak_jwks_url() -> str:
-    if KEYCLOAK_JWKS_URL:
-        return KEYCLOAK_JWKS_URL
-    if not KEYCLOAK_ISSUER:
-        raise HTTPException(status_code=500, detail="KEYCLOAK_ISSUER environment variable not set")
-    return f"{KEYCLOAK_ISSUER}/protocol/openid-connect/certs"
+# def _build_keycloak_jwks_url() -> str:
+#     if KEYCLOAK_JWKS_URL:
+#         return KEYCLOAK_JWKS_URL
+#     if not KEYCLOAK_ISSUER:
+#         raise HTTPException(status_code=500, detail="KEYCLOAK_ISSUER environment variable not set")
+#     return f"{KEYCLOAK_ISSUER}/protocol/openid-connect/certs"
 
 
-def get_jwks_client() -> jwt.PyJWKClient:
+def get_jwks_client(retujwks_url) -> jwt.PyJWKClient:
     global _JWKS_CLIENT
     if _JWKS_CLIENT is None:
-        _JWKS_CLIENT = jwt.PyJWKClient(_build_keycloak_jwks_url())
+        _JWKS_CLIENT = jwt.PyJWKClient(retujwks_url, cache_keys=True)
     return _JWKS_CLIENT
 
 
@@ -149,11 +149,20 @@ def decode_keycloak_token(token: str) -> Dict[str, Any]:
 
     if not KEYCLOAK_ISSUER:
         raise HTTPException(status_code=500, detail="KEYCLOAK_ISSUER environment variable not set")
+
+    if KEYCLOAK_JWKS_URL:
+        retujwks_url = KEYCLOAK_JWKS_URL
+
+    elif KEYCLOAK_ISSUER and not KEYCLOAK_JWKS_URL:
+        retujwks_url = f"{KEYCLOAK_ISSUER}/protocol/openid-connect/certs"
+    else:
+        raise HTTPException(status_code=500, detail="KEYCLOAK_JWKS_URL environment variable not set")
+
     try:
         # Resolve the signing key from Keycloak JWKS using the JWT header `kid`.
         # This lets the service verify tokens locally without calling Keycloak for every request.
 
-        signing_key = get_jwks_client().get_signing_key_from_jwt(token)
+        signing_key = get_jwks_client(retujwks_url).get_signing_key_from_jwt(token)
 
         # Prepare JWT verification settings:
         # - `key` is the resolved public key
