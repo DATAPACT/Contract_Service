@@ -6,6 +6,21 @@ from utils import create_odrl_decription, scrub_definitions, _money_eur
 import re
 from datetime import datetime, date
 
+from typing import List, Optional, Union
+
+def format_organization(org: Optional[Union[List[str], str]]) -> Optional[str]:
+    if isinstance(org, str):
+        return org.strip() or None
+
+    if isinstance(org, list):
+        values = [
+            item.strip()
+            for item in org
+            if isinstance(item, str) and item.strip()
+        ]
+        return ", ".join(values) or None
+
+    return None
 
 # new version 10 sep
 def get_dsa_contract_text(data):
@@ -230,7 +245,12 @@ def get_dsa_contract_text(data):
     effective_date_raw = data_dict.get("effective_date")
     effective_date = fmt_humandate(effective_date_raw) or fmt_humandate(updated_at) or human_today_london()
 
-    provider_name = coalesce(cp.get("organization"), "(please provide organization name)")
+    provider_name = coalesce(
+        format_organization(cp.get("organization")),
+        "(please provide organization name)",
+    )
+
+    # provider_name = coalesce(cp.get("organization"), "(please provide organization name)")
 
     provider_title = coalesce(cp.get("type")).upper()
 
@@ -245,7 +265,14 @@ def get_dsa_contract_text(data):
         cp.get('position_title'), cp.get("role"), '(please provide representative role)'
     )
 
-    consumer_name = coalesce(cc.get("organization"), "(please provide organization name)")
+
+
+    consumer_name = coalesce(
+        format_organization(cc.get("organization")),
+        "(please provide organization name)",
+    )
+
+    # consumer_name = coalesce(cc.get("organization"), "(please provide organization name)")
 
     consumer_title = coalesce(cc.get("type")).upper()
 
