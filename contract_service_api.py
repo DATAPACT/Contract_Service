@@ -131,7 +131,7 @@ _SWAGGER_HTML = (
 
   window.onload = function () {
     window._swaggerUi = SwaggerUIBundle({
-      url: "/openapi.json",
+      url: "./openapi.json",
       dom_id: "#swagger-ui",
       presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
       layout: "StandaloneLayout",
