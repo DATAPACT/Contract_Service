@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.11.11-slim
+FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
