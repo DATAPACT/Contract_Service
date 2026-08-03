@@ -135,7 +135,7 @@ def get_dsa_contract_text(data):
 
         lines.append(bullet("Contact Person", pick(p, "name", "contact_name", "person")))
         lines.append(bullet("Position Title", pick(p, "position_title", "role", )))
-        lines.append(bullet("Email", pick(p, "email", "e_mail", "username_email")))
+        lines.append(bullet("Email", pick(p, "email", "e_mail")))
         lines.append(bullet("Phone", pick(p, "phone", "telephone", "tel")))
         lines.append(bullet("Address", pick(p, "address", "registered_address", "postal_address")))
         notices_email = pick(p, "notices_email", "notice_email")

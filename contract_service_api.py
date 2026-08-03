@@ -286,7 +286,7 @@ class AuthenticationRegisterUser(BaseModel):
     name: Optional[str] = None
     username: Optional[str] = None
     type: Optional[str] = None
-    username_email: Optional[str] = None
+    email: Optional[str] = None
     password: Optional[str] = None
     organization: Optional[Any] = None
     incorporation: Optional[str] = None
@@ -369,7 +369,7 @@ def _set_contract_access_metadata(contract_obj: Dict[str, Any], current_user: Au
     contract_obj["owner_user_id"] = str(current_user.id)
     # Keep a human-readable owner identifier alongside the internal owner id to
     # simplify debugging, audit trails, and operational inspection.
-    contract_obj["owner_username_email"] = current_user.username_email
+    contract_obj["owner_email"] = current_user.email
     # Build the allow-list of local user ids that may access this contract.
     # This combines the authenticated creator with any participant ids already
     # present in the contract payload.
@@ -584,7 +584,7 @@ async def update_contract(
         contract_obj.pop('id', None)  # remove id item
         # Preserve/update access metadata instead of dropping it on each update.
         contract_obj["owner_user_id"] = existing_contract.get("owner_user_id", str(current_user.id))
-        contract_obj["owner_username_email"] = existing_contract.get("owner_username_email", current_user.username_email)
+        contract_obj["owner_email"] = existing_contract.get("owner_email", current_user.email)
         contract_obj["authorized_user_ids"] = sorted(
             set(existing_contract.get("authorized_user_ids", []))
             | set(_collect_contract_access_user_ids(contract_obj))
@@ -767,7 +767,7 @@ async def sign_contract(
         }
         # Tie the signature update back to the authenticated caller for auditing.
         update_data["signed_by_user_id"] = str(current_user.id)
-        update_data["signed_by_username_email"] = current_user.username_email
+        update_data["signed_by_email"] = current_user.email
 
         # Prevent a consumer token from signing the provider field and vice versa
         # when the contract already contains participant ids.

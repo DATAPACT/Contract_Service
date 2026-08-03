@@ -87,7 +87,7 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
     if not keycloak_sub:
         raise HTTPException(status_code=401, detail="Keycloak token missing subject")
 
-    username_email = claims.get("email") or claims.get("preferred_username")
+    email = claims.get("email") or claims.get("preferred_username")
     first_name = (claims.get("given_name") or "").strip() or None
     last_name = (claims.get("family_name") or "").strip() or None
     display_name = build_full_name(first_name, last_name)
@@ -111,12 +111,12 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
     user = await users_collection.find_one({"$or": [{"keycloak_sub": keycloak_sub},
                                                     {"keycloak_user_id": keycloak_sub}]})
 
-    if not user and username_email:
+    if not user and email:
 
         # When migrating existing users to Keycloak, first try to match the
         # existing user document by email and then bind it to the Keycloak `sub`.
 
-        user = await users_collection.find_one({"username_email": username_email})
+        user = await users_collection.find_one({"email": email})
         if user:
             bind_fields = {
                 "keycloak_sub": keycloak_sub,
@@ -156,7 +156,7 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
         # so contract ownership and access control can continue using a local Mongo `_id`.
 
         placeholder_value = "miss value"
-        username_email = username_email or f"{keycloak_sub}@missing.local"
+        email = email or f"{keycloak_sub}@missing.local"
         first_name = first_name or placeholder_value
         last_name = last_name or placeholder_value
         display_name = build_full_name(first_name, last_name) or placeholder_value
@@ -168,7 +168,7 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
             "name": display_name,
             "username": username,
             "type": placeholder_type,
-            "username_email": username_email,
+            "email": email,
             "password": None,
             "organization": organization or [placeholder_value],
             "incorporation": incorporation or placeholder_value,
@@ -185,7 +185,7 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
         (log or logger).warning(
             "Keycloak user %s (%s) is not registered in MongoDB. Creating placeholder local user with miss value defaults so contract processing can continue.",
             keycloak_sub,
-            username_email,
+            email,
         )
         insert_result = await users_collection.insert_one(new_user)
         user = await users_collection.find_one({"_id": insert_result.inserted_id})
@@ -197,8 +197,8 @@ async def resolve_or_create_local_user_from_claims(claims: Dict[str, Any], log: 
             "updated_at": now,
             "last_login_at": now,
         }
-        if username_email and user.get("username_email") != username_email:
-            update_fields["username_email"] = username_email
+        if email and user.get("email") != email:
+            update_fields["email"] = email
         if first_name and user.get("first_name") != first_name:
             update_fields["first_name"] = first_name
         if last_name and user.get("last_name") != last_name:
@@ -239,7 +239,7 @@ def build_authenticated_user_payload(user: Dict[str, Any], claims: Dict[str, Any
         "id": str(user["_id"]),
         "keycloak_sub": claims.get("sub"),
         "username": user.get("username") or claims.get("preferred_username"),
-        "username_email": user.get("username_email") or claims.get("email"),
+        "email": user.get("email") or claims.get("email"),
         "first_name": user.get("first_name") or claims.get("given_name"),
         "last_name": user.get("last_name") or claims.get("family_name"),
         "name": user.get("name") or claims.get("name"),

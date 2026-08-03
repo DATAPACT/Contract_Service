@@ -116,7 +116,7 @@ def get_consent_contract_text(data):
         p = norm_keys(p)
         lines = ["\t\tA2.1 Data Provider"]
         lines.append(bullet("Full name", pick(p, "full_name", "name")))
-        lines.append(bullet("Email", pick(p, "username_email", "user_email")))
+        lines.append(bullet("Email", pick(p, "email", "user_email")))
         lines.append(bullet("Phone", pick(p, "phone", "telephone", "tel")))
         lines.append(bullet("Address", pick(p, "address", "residential_address", "registered_address")))
         lines.append("")
@@ -128,7 +128,7 @@ def get_consent_contract_text(data):
         lines.append(bullet("Organization", pick(c, "organization", "company_name", "name")))
         lines.append(bullet("Contact Person", pick(c, "contact_person", "contact_name", "name")))
         lines.append(bullet("Role/Title", pick(c, "position_title", "role", "title", "position")))
-        lines.append(bullet("Email", pick(c, "username_email", "user_email")))
+        lines.append(bullet("Email", pick(c, "email", "user_email")))
         lines.append(bullet("Phone", pick(c, "phone", "telephone", "tel")))
         lines.append(bullet("Address", pick(c, "address", "registered_address", "postal_address")))
         lines.append("")

@@ -1472,8 +1472,8 @@ def contract_to_turtle(contract: Dict[str, Any], include_contract_node: bool = F
             graph.add((party_uri, FOAF.name, Literal(party["organization"])))
         elif party.get("name"):
             graph.add((party_uri, FOAF.name, Literal(party["name"])))
-        if party.get("username_email"):
-            email = party["username_email"].strip()
+        if party.get("email"):
+            email = party["email"].strip()
             graph.add((party_uri, FOAF.mbox, URIRef(f"mailto:{email}")))
         if party.get("phone"):
             phone = re.sub(r"\s+", "", party["phone"])
@@ -1800,7 +1800,7 @@ TEXT_FIELDS = [
     "base_info.contacts.consumer.name",
     "base_info.contacts.consumer.organization",
     "base_info.contacts.consumer.distinctive_title",
-    "base_info.contacts.consumer.username_email",
+    "base_info.contacts.consumer.email",
     "base_info.contacts.consumer.legal_representative",
     "base_info.contacts.consumer.contact_person",
     "base_info.contacts.consumer.role",
@@ -1815,7 +1815,7 @@ TEXT_FIELDS = [
     "base_info.contacts.provider.name",
     "base_info.contacts.provider.organization",
     "base_info.contacts.provider.distinctive_title",
-    "base_info.contacts.provider.username_email",
+    "base_info.contacts.provider.email",
     "base_info.contacts.provider.legal_representative",
     "base_info.contacts.provider.contact_person",
     "base_info.contacts.provider.role",

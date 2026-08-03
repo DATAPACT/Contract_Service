@@ -32,7 +32,7 @@ class AuthenticatedUser(BaseModel):
     id: str
     keycloak_sub: Optional[str] = None
     username: Optional[str] = None
-    username_email: Optional[str] = None
+    email: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     name: Optional[str] = None
