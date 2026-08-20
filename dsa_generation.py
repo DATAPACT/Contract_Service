@@ -404,7 +404,7 @@ each hereinafter referred to as the “Party” and jointly both of the above th
 
     if geographic_scope and temporal_coverage:
         ctx.append(
-            f"\t4.2. This data set contains the performance indicators of marketing campaigns in {[geographic_scope]} "
+            f"\t4.2. This data set contains the performance indicators of marketing campaigns in {geographic_scope} "
             f"concerning the {categories} business verticals within the defined time period {temporal_coverage}. "
             "The information provided at keyword level offer the possibility of generating detail description of the society interests and trends.\n")
         ctx.append("\t4.3. The Machine-Readable (MR) version of the description of data (including its URI, description, format, size, associated tags, and environmental cost metrics) is presented in the Appendix A1.\n")
