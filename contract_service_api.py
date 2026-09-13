@@ -39,12 +39,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 load_dotenv(dotenv_path=".env")
 
+compose_project_name = os.getenv("COMPOSE_PROJECT_NAME", "").strip().strip("/")
+root_path = (
+    f"/{compose_project_name}/contract-service-api"
+    if compose_project_name
+    else "/contract-service-api"
+)
 app = FastAPI(
     title="Contract Service API",
     description="DIPS Contract Service API",
     openapi_url="/openapi.json",
     docs_url=None,  # replaced by custom /docs with SSO postMessage support
     version="1.0",
+    root_path=root_path,
 )
 
 origins = [

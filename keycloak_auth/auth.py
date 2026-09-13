@@ -25,7 +25,7 @@ KEYCLOAK_ALGORITHMS = [
     if algo.strip()
 ]
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login/")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="user/login/")
 
 
 class AuthenticatedUser(BaseModel):
