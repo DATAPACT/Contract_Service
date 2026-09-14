@@ -27,7 +27,7 @@ from ca_generation import get_consent_contract_text
 from dsa_generation import get_dsa_contract_text
 from cactus_dsa_generation import get_cactus_dsa_contract_text
 from utils import (text_to_pdf_bytes, TEXT_FIELDS, regex_or_query, create_odrl_decription, _to_bytes, summarize_text,
-                   odrl_formate_convert, contract_to_turtle)
+                   odrl_formate_convert, contract_to_turtle, normalize_odrl_policy_for_translation)
 
 # Configure root logger once (e.g. at program entrypoint)
 logging.basicConfig(
@@ -1266,7 +1266,11 @@ async def get_summary_for_contract(
 async def odrl_translation(
         body: Dict[str, Any] = Body(..., description="request body"),
 ):
-    odrl_dic = body
+    try:
+        odrl_dic = normalize_odrl_policy_for_translation(body)
+    except (TypeError, ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=f"ODRL conversion failed: {exc}") from exc
+
     definitions = {}
     odrl_summary = create_odrl_decription(odrl_dic, definitions)
 

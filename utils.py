@@ -1349,6 +1349,98 @@ from odrl_format_conversion import custom_convert_odrl_policy, filter_dicts_with
     convert_list_to_odrl_jsonld_no_user
 
 
+def normalize_odrl_policy_for_translation(odrl_policy: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert prefixed ODRL JSON-LD into the format used by the translator.
+
+    Policies already using unprefixed keys such as ``permission`` and
+    ``constraint`` are returned unchanged. Compact JSON-LD policies using
+    keys such as ``odrl:permission`` are converted with the existing ODRL
+    conversion pipeline.
+    """
+    if not isinstance(odrl_policy, dict):
+        raise TypeError(
+            f"ODRL policy must be a dict, got {type(odrl_policy).__name__}"
+        )
+
+    policy = deepcopy(odrl_policy)
+    rule_keys = (
+        "odrl:permission",
+        "odrl:prohibition",
+        "odrl:obligation",
+        "odrl:duty",
+    )
+    if not any(key in policy for key in rule_keys):
+        return policy
+
+    # ODRL permits common parties and targets at policy level. The existing
+    # graph converter reads these properties from each rule, so materialize
+    # the inherited values before running the conversion pipeline.
+    inherited_keys = ("odrl:assignee", "odrl:assigner", "odrl:target")
+    for rule_key in rule_keys:
+        rules = policy.get(rule_key, [])
+        if isinstance(rules, dict):
+            rules = [rules]
+            policy[rule_key] = rules
+        if not isinstance(rules, list):
+            raise TypeError(f"'{rule_key}' must be a list or an object")
+
+        for rule in rules:
+            if not isinstance(rule, dict):
+                raise TypeError(f"Every '{rule_key}' item must be an object")
+            for inherited_key in inherited_keys:
+                if inherited_key not in rule and inherited_key in policy:
+                    rule[inherited_key] = deepcopy(policy[inherited_key])
+
+    try:
+        custom_format = custom_convert_odrl_policy(json.dumps(policy))
+    except Exception as exc:
+        raise RuntimeError(f"custom_convert_odrl_policy() failed: {exc}") from exc
+
+    try:
+        filtered_data = filter_dicts_with_none_values(custom_format)
+    except Exception as exc:
+        raise RuntimeError(f"filter_dicts_with_none_values() failed: {exc}") from exc
+
+    try:
+        converted_policy = convert_list_to_odrl_jsonld_no_user(filtered_data)
+    except Exception as exc:
+        raise RuntimeError(
+            f"convert_list_to_odrl_jsonld_no_user() failed: {exc}"
+        ) from exc
+
+    if not isinstance(converted_policy, dict):
+        raise TypeError(
+            "Converted ODRL must be a dict, got "
+            f"{type(converted_policy).__name__}"
+        )
+
+    # The legacy conversion pipeline emits an empty purpose placeholder and
+    # wraps every constraint value in a list. Remove the placeholder and
+    # unwrap single values to match the translator's established input shape.
+    for rule_type in ("permission", "prohibition", "obligation", "duty"):
+        for rule in converted_policy.get(rule_type, []):
+            constraints = []
+            for constraint in rule.get("constraint", []):
+                if (
+                    constraint.get("leftOperand") == "purpose"
+                    and constraint.get("rightOperand") in (None, "", [])
+                ):
+                    continue
+                right_operand = constraint.get("rightOperand")
+                if isinstance(right_operand, list) and len(right_operand) == 1:
+                    constraint["rightOperand"] = right_operand[0]
+                constraints.append(constraint)
+            rule["constraint"] = constraints
+
+    if not any(key in converted_policy for key in ("permission", "prohibition", "obligation", "duty")):
+        raise ValueError("The ODRL policy did not contain any convertible rules")
+
+    if policy.get("@id"):
+        converted_policy["uid"] = policy["@id"]
+
+    return converted_policy
+
+
 def odrl_formate_convert(request_body):
     if not isinstance(request_body, dict):
         raise TypeError(f"request_body must be dict, got {type(request_body).__name__}")
