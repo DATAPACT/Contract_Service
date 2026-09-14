@@ -298,6 +298,15 @@ def get_dsa_contract_text(data):
         except Exception:
             term_text = f"{validity_period} from the Effective Date, unless earlier terminated in accordance with this Agreement."
 
+    if notice_period in (None, "", {}):
+        notice_period_text = "(please provide notice period)"
+    else:
+        try:
+            notice_days = int(notice_period)
+            notice_period_text = f"{num2words(notice_days)} ({notice_days})"
+        except (TypeError, ValueError):
+            notice_period_text = str(notice_period)
+
     # -------------------------------
     # Build document
     # -------------------------------
@@ -523,13 +532,13 @@ each hereinafter referred to as the “Party” and jointly both of the above th
     # 13. DURATION AND TERMINATION OF THE AGREEMENT.
     ctx.append("13. DURATION AND TERMINATION OF THE AGREEMENT.")
     ctx.append(
-        f"\t13.1. Either Party may terminate this Agreement for any significant reason by providing the other Party with {num2words(notice_period)} ({notice_period}) days’ prior written notice. For the purposes of this Agreement, a \"significant reason\" shall include, but is not limited to: (a) a change in applicable laws, regulations, or data protection requirements that makes data sharing unlawful or unduly burdensome; (b) reasonable concerns regarding the security, integrity, or misuse of shared data by the Data Consumer; (c) Reputational risk or public concern arising from the data sharing relationship; (d) a corporate transaction (such as a merger, acquisition, or divestiture) that materially affects the basis for this Agreement; and (e) a breakdown in the collaborative relationship that materially impairs the ability of the Parties to perform their obligations in good faith. The terminating Party shall act reasonably and in good faith when invoking a significant reason for termination.")
+        f"\t13.1. Either Party may terminate this Agreement for any significant reason by providing the other Party with {notice_period_text} days’ prior written notice. For the purposes of this Agreement, a \"significant reason\" shall include, but is not limited to: (a) a change in applicable laws, regulations, or data protection requirements that makes data sharing unlawful or unduly burdensome; (b) reasonable concerns regarding the security, integrity, or misuse of shared data by the Data Consumer; (c) Reputational risk or public concern arising from the data sharing relationship; (d) a corporate transaction (such as a merger, acquisition, or divestiture) that materially affects the basis for this Agreement; and (e) a breakdown in the collaborative relationship that materially impairs the ability of the Parties to perform their obligations in good faith. The terminating Party shall act reasonably and in good faith when invoking a significant reason for termination.")
     ctx.append("\t13.2. A breach of any term hereof shall be deemed a material breach of this Agreement.")
     ctx.append("\t13.3. Upon termination of this Agreement for any reason:")
     ctx.append(
         "\t\t(a) Cessation of Data Sharing: Data Consumer shall immediately cease all operations related to the data being processed under this Agreement.")
     ctx.append(
-        f"\t\t(b) Return or Destruction of Shared Data: Data Consumer shall, within {num2words(notice_period)} ({notice_period}) days of termination and in accordance with the instructions of the Data Provider, return or permanently and securely delete all data received from the Data Provider, unless retention is required to comply with applicable laws, regulations, or contractual obligations.")
+        f"\t\t(b) Return or Destruction of Shared Data: Data Consumer shall, within {notice_period_text} days of termination and in accordance with the instructions of the Data Provider, return or permanently and securely delete all data received from the Data Provider, unless retention is required to comply with applicable laws, regulations, or contractual obligations.")
     ctx.append(
         "\t\t(c) Confirmation of Destruction: Upon request, the Data Consumer shall provide written confirmation that all shared data has been destroyed in accordance with this clause.")
     ctx.append(
